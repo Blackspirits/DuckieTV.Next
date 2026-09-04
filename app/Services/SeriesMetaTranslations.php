@@ -8,15 +8,15 @@ namespace App\Services;
 class SeriesMetaTranslations
 {
     public const GENRES = [
-        'action', 'adventure', 'animation', 'anime', 'biography', 'children', 'comedy', 'crime', 'disaster', 'documentary', 'drama', 'eastern', 'family', 'fan-film', 'fantasy', 'film-noir', 'food', 'game-show', 'history', 'holiday', 'home-and-garden', 'horror', 'indie', 'mini-series', 'music', 'musical', 'mystery', 'news', 'none', 'reality', 'road', 'romance', 'science-fiction', 'short', 'soap', 'special-interest', 'sports', 'sporting-event', 'superhero', 'suspense', 'talk-show', 'thriller', 'travel', 'tv-movie', 'war', 'western'
+        'action', 'adventure', 'animation', 'anime', 'biography', 'children', 'comedy', 'crime', 'disaster', 'documentary', 'drama', 'eastern', 'family', 'fan-film', 'fantasy', 'film-noir', 'food', 'game-show', 'history', 'holiday', 'home-and-garden', 'horror', 'indie', 'mini-series', 'music', 'musical', 'mystery', 'news', 'none', 'reality', 'road', 'romance', 'science-fiction', 'short', 'soap', 'special-interest', 'sports', 'sporting-event', 'superhero', 'suspense', 'talk-show', 'thriller', 'travel', 'tv-movie', 'war', 'western',
     ];
 
     public const STATUSES = [
-        'canceled', 'ended', 'in production', 'returning series', 'planned'
+        'canceled', 'ended', 'in production', 'returning series', 'planned',
     ];
 
     public const DAYS_OF_WEEK = [
-        'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
     ];
 
     /**
@@ -24,11 +24,14 @@ class SeriesMetaTranslations
      */
     public function translateGenre(?string $genre): string
     {
-        if (!$genre) return '';
+        if (! $genre) {
+            return '';
+        }
         $genre = strtolower(trim($genre));
         $idx = array_search($genre, self::GENRES);
-        
+
         $translatedList = explode('|', __('GENRELIST'));
+
         return ($idx !== false && isset($translatedList[$idx])) ? $translatedList[$idx] : ucfirst($genre);
     }
 
@@ -37,11 +40,14 @@ class SeriesMetaTranslations
      */
     public function translateStatus(?string $status): string
     {
-        if (!$status) return '';
+        if (! $status) {
+            return '';
+        }
         $status = strtolower(trim($status));
         $idx = array_search($status, self::STATUSES);
-        
+
         $translatedList = explode('|', __('STATUSLIST'));
+
         return ($idx !== false && isset($translatedList[$idx])) ? $translatedList[$idx] : ucfirst($status);
     }
 

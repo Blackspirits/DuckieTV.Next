@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\WatchlistService;
+use Illuminate\Http\Request;
 
 class WatchlistController extends Controller
 {
@@ -13,7 +13,7 @@ class WatchlistController extends Controller
     public function index(Request $request, WatchlistService $watchlistService)
     {
         $items = $watchlistService->getTop10Movies();
-        
+
         if ($request->ajax()) {
             return view('watchlist.index', ['items' => $items]);
         }
@@ -21,7 +21,7 @@ class WatchlistController extends Controller
         return view('layouts.app', [
             'title' => 'Watchlist',
             'view' => 'watchlist.index',
-            'items' => $items
+            'items' => $items,
         ]);
     }
 }

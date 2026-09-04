@@ -2,33 +2,37 @@
 
 namespace Tests\Unit\Services;
 
-use App\Models\Episode;
 use App\Models\Serie;
 use App\Services\AutoDownloadService;
 use App\Services\FavoritesService;
-use App\Services\SettingsService;
-use App\Services\TorrentSearchService;
 use App\Services\SceneNameResolverService;
+use App\Services\SettingsService;
 use App\Services\TorrentClientService;
+use App\Services\TorrentSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 use Mockery;
+use Tests\TestCase;
 
 class AutoDownloadServiceTest extends TestCase
 {
     use RefreshDatabase;
 
     protected AutoDownloadService $service;
+
     protected $settingsMock;
+
     protected $favoritesMock;
+
     protected $searchMock;
+
     protected $sceneNameMock;
+
     protected $torrentClientMock;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->settingsMock = Mockery::mock(SettingsService::class);
         $this->favoritesMock = Mockery::mock(FavoritesService::class);
         $this->searchMock = Mockery::mock(TorrentSearchService::class);
@@ -50,18 +54,18 @@ class AutoDownloadServiceTest extends TestCase
      */
     public function test_filter_by_score()
     {
-        $query = "Big Bang Theory s01e01 1080p";
-        
+        $query = 'Big Bang Theory s01e01 1080p';
+
         $cases = [
-            ['name' => "The.Big.Bang.Theory.S01E01.1080p.Bluray", 'expected' => true],
-            ['name' => "Big.Bang.Theory.S01E01.720p", 'expected' => false], // missing 1080p
-            ['name' => "The Big Bang Theory S01E01 1080p x265", 'expected' => true],
-            ['name' => "Theory.S01E01.1080p", 'expected' => false], // missing Big, Bang
+            ['name' => 'The.Big.Bang.Theory.S01E01.1080p.Bluray', 'expected' => true],
+            ['name' => 'Big.Bang.Theory.S01E01.720p', 'expected' => false], // missing 1080p
+            ['name' => 'The Big Bang Theory S01E01 1080p x265', 'expected' => true],
+            ['name' => 'Theory.S01E01.1080p', 'expected' => false], // missing Big, Bang
         ];
 
         foreach ($cases as $case) {
             $result = $this->invokePrivateMethod($this->service, 'filterByScore', [$case['name'], $query]);
-            $this->assertEquals($case['expected'], $result, "Failed for: " . $case['name']);
+            $this->assertEquals($case['expected'], $result, 'Failed for: '.$case['name']);
         }
     }
 
@@ -72,7 +76,7 @@ class AutoDownloadServiceTest extends TestCase
     public function test_filter_by_size_no_normalization_parity()
     {
         $serie = new Serie(['custom_search_size_min' => 100, 'custom_search_size_max' => 500]);
-        
+
         $cases = [
             ['size' => '250 MB', 'expected' => true],
             ['size' => '50 MB',  'expected' => false],
@@ -85,7 +89,7 @@ class AutoDownloadServiceTest extends TestCase
 
         foreach ($cases as $case) {
             $result = $this->invokePrivateMethod($this->service, 'filterBySize', [$case['size'], $serie, 0, 1000]);
-            $this->assertEquals($case['expected'], $result, "Failed for size: " . $case['size']);
+            $this->assertEquals($case['expected'], $result, 'Failed for size: '.$case['size']);
         }
     }
 
@@ -94,25 +98,25 @@ class AutoDownloadServiceTest extends TestCase
      */
     public function test_filter_keywords_with_exclude_override_prevention()
     {
-        $q = "The Show S01E01 x264";
+        $q = 'The Show S01E01 x264';
 
         $cases = [
             // Require keywords (OR mode)
             ['name' => 'The.Show.S01E01.x264', 'require' => 'x264 x265', 'ignore' => '', 'expected' => true],
             ['name' => 'The.Show.S01E01.hvc1', 'require' => 'x264 x265', 'ignore' => '', 'expected' => false],
-            
+
             // Ignore keywords
             ['name' => 'The.Show.S01E01.PROPER', 'require' => '', 'ignore' => 'PROPER', 'expected' => false],
             ['name' => 'The.Show.S01E01.HDTV',   'require' => '', 'ignore' => 'PROPER', 'expected' => true],
 
             // Parity Check: prevent exclude list from overriding primary search string
             // 'x264' is in q, so it should be filtered OUT of the ignore list.
-            ['name' => 'The.Show.S01E01.x264', 'require' => '', 'ignore' => 'x264', 'expected' => true], 
+            ['name' => 'The.Show.S01E01.x264', 'require' => '', 'ignore' => 'x264', 'expected' => true],
         ];
 
         foreach ($cases as $case) {
             $result = $this->invokePrivateMethod($this->service, 'filterKeywords', [$case['name'], $case['require'], $case['ignore'], true, $q]);
-            $this->assertEquals($case['expected'], $result, "Failed for: " . $case['name']);
+            $this->assertEquals($case['expected'], $result, 'Failed for: '.$case['name']);
         }
     }
 
@@ -124,6 +128,7 @@ class AutoDownloadServiceTest extends TestCase
         $reflection = new \ReflectionClass(get_class($object));
         $method = $reflection->getMethod($methodName);
         $method->setAccessible(true);
+
         return $method->invokeArgs($object, $parameters);
     }
 }

@@ -25,7 +25,7 @@ class EpisodeController extends Controller
             try {
                 if ($client->connect()) {
                     $torrents = $client->getTorrents();
-                    
+
                     // Priority 1: Match by InfoHash (if episode has one)
                     if ($episode->magnetHash) {
                         foreach ($torrents as $torrent) {
@@ -37,7 +37,7 @@ class EpisodeController extends Controller
                     }
 
                     // Priority 2: Fallback to name matching if no infoHash match
-                    if (!$matchedTorrent) {
+                    if (! $matchedTorrent) {
                         $showName = strtolower($serie->name);
                         $showNameDots = str_replace(' ', '.', $showName);
                         $episodeCode = strtolower($episode->formatted_episode);
@@ -94,7 +94,7 @@ class EpisodeController extends Controller
     {
         $episode = Episode::with('serie')->findOrFail($id);
         $service = app(\App\Services\AutoDownloadService::class);
-        
+
         $success = $service->manualDownload($episode);
 
         if ($success) {

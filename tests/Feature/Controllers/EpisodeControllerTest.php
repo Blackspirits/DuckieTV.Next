@@ -2,15 +2,12 @@
 
 namespace Tests\Feature\Controllers;
 
+use App\DTOs\TorrentData\TorrentData;
 use App\Models\Episode;
 use App\Models\Serie;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
-use App\DTOs\TorrentData\TorrentData;
-use App\Services\TorrentClients\TorrentClientInterface;
-use App\Services\TorrentClientService;
-use App\Services\SceneNameResolverService;
 
 class EpisodeControllerTest extends TestCase
 {

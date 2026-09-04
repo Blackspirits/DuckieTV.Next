@@ -7,7 +7,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-use Illuminate\Support\Facades\Schedule;
 use App\Jobs\PruneAutoDLActivitiesJob;
+use Illuminate\Support\Facades\Schedule;
 
-Schedule::job(new PruneAutoDLActivitiesJob())->weekly();
+Schedule::job(new PruneAutoDLActivitiesJob)->weekly();
