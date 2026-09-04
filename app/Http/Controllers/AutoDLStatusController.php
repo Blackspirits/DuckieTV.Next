@@ -20,7 +20,7 @@ class AutoDLStatusController extends Controller
     public function index(Request $request)
     {
         $activityList = $this->autoDownload->getActivityList();
-        
+
         if ($request->ajax()) {
             return view('autodlstatus.index', [
                 'activityList' => $activityList,
@@ -32,7 +32,7 @@ class AutoDLStatusController extends Controller
         return view('layouts.app', [
             'title' => 'Auto-Download Status',
             'view' => 'autodlstatus.index',
-            'activityList' => $activityList
+            'activityList' => $activityList,
         ]);
     }
 }

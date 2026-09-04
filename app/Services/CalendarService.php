@@ -254,8 +254,6 @@ class CalendarService
      * Get episode counts per year for a given decade (or range of years).
      * Used by the decade overview calendar view.
      *
-     * @param  int  $startYear
-     * @param  int  $endYear
      * @return array<int, int> Year => episode count
      */
     public function getEpisodeCountsByYear(int $startYear, int $endYear): array

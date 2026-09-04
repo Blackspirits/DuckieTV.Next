@@ -7,9 +7,6 @@ class MagnetUri
     /**
      * Extract the infoHash from a magnet URI or raw string.
      * Replicates logic from DuckieTV-angular's utility.js String.prototype.getInfoHash
-     *
-     * @param string $magnetUri
-     * @return string|null
      */
     public static function extractInfoHash(string $magnetUri): ?string
     {

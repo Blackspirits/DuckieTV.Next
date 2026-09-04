@@ -4,14 +4,14 @@ namespace Tests\Unit;
 
 use App\Services\SettingsService;
 use App\Services\TorrentSearchEngines\LimeTorrentsEngine;
-use Tests\TestCase;
 use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
 
 class LimeTorrentsSeederTest extends TestCase
 {
     public function test_parses_seeders_correctly()
     {
-        $html = <<<HTML
+        $html = <<<'HTML'
         <table class="table2">
             <tr bgcolor="#F4F4F4">
                 <td>Category</td>

@@ -354,22 +354,22 @@ class FavoritesService
     {
         $query = Serie::whereNotNull('name');
 
-        if (!empty($filters['query'])) {
+        if (! empty($filters['query'])) {
             $q = $filters['query'];
-            $query->where(function($sub) use ($q) {
+            $query->where(function ($sub) use ($q) {
                 $sub->where('name', 'LIKE', "%{$q}%")
                     ->orWhere('alias', 'LIKE', "%{$q}%");
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $status = (array) $filters['status'];
             $query->whereIn('status', $status);
         }
 
-        if (!empty($filters['genre'])) {
+        if (! empty($filters['genre'])) {
             $genres = (array) $filters['genre'];
-            $query->where(function($sub) use ($genres) {
+            $query->where(function ($sub) use ($genres) {
                 foreach ($genres as $genre) {
                     $sub->orWhere('genre', 'LIKE', "%{$genre}%");
                 }

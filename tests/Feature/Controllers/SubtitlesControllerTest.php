@@ -16,7 +16,7 @@ class SubtitlesControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         // Mock the SubtitlesService
         $this->subtitlesService = Mockery::mock(SubtitlesService::class);
         $this->app->instance(SubtitlesService::class, $this->subtitlesService);
@@ -40,7 +40,7 @@ class SubtitlesControllerTest extends TestCase
 
         $this->subtitlesService->shouldReceive('searchByEpisode')
             ->once()
-            ->with(Mockery::on(fn($ep) => $ep->id === $episode->id), Mockery::any())
+            ->with(Mockery::on(fn ($ep) => $ep->id === $episode->id), Mockery::any())
             ->andReturn($mockResults);
 
         $response = $this->post(route('subtitles.search'), [

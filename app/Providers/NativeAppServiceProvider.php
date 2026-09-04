@@ -4,10 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\ProvidesPhpIni;
-use Native\Desktop\Facades\MenuBar;
-use Native\Desktop\Facades\Menu;
-use Native\Desktop\Facades\Window;
 use Native\Desktop\Events\Windows\WindowMinimized;
+use Native\Desktop\Facades\Menu;
+use Native\Desktop\Facades\MenuBar;
+use Native\Desktop\Facades\Window;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {

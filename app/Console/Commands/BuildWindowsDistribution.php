@@ -27,11 +27,11 @@ class BuildWindowsDistribution extends Command
     public function handle()
     {
         $this->info('Starting Windows build for DuckieTV.Next...');
-  
+
         // Ensure we are in the right directory or environment
         // Running native:build win
         $this->info('Running php artisan native:build win...');
-        
+
         // We use system call or Process to run the command to ensure output is streamed or handled
         // Simple call:
         $this->call('native:build', ['os' => 'win']);
