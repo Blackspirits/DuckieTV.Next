@@ -1,0 +1,92 @@
+name: PR06 Candidate Builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-06-builder-run'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve builder and reset to exact prerequisite
+        env:
+          PREREQUISITE: bdfce3d14560e4184e56b065c7304af017566e56
+        run: |
+          cp .github/scripts/pr06-build.py /tmp/pr06-build.py
+          git reset --hard "$PREREQUISITE"
+          test "$(git rev-parse HEAD)" = "$PREREQUISITE"
+          python /tmp/pr06-build.py
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Focused PR06 regression
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test tests/Feature/Controllers/TorrentConnectionSurfaceTest.php
+
+      - name: PHP linting
+        run: ./vendor/bin/pint --test
+
+      - name: Full test suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test
+
+      - name: Validate exact candidate surface
+        run: |
+          expected=$(printf '%s\n' \
+            app/Http/Controllers/TorrentController.php \
+            app/Jobs/AttemptTorrentConnection.php \
+            routes/web.php \
+            tests/Feature/Controllers/TorrentConnectionSurfaceTest.php | sort)
+          actual=$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)
+          test "$actual" = "$expected"
+          git diff --check
+
+      - name: Materialize candidate branch
+        run: |
+          git config user.name 'BlackSpirits'
+          git config user.email 'blackspirits@gmail.com'
+          git add -A app/Http/Controllers/TorrentController.php app/Jobs/AttemptTorrentConnection.php routes/web.php tests/Feature/Controllers/TorrentConnectionSurfaceTest.php
+          expected=$(printf '%s\n' \
+            app/Http/Controllers/TorrentController.php \
+            app/Jobs/AttemptTorrentConnection.php \
+            routes/web.php \
+            tests/Feature/Controllers/TorrentConnectionSurfaceTest.php | sort)
+          actual=$(git diff --cached --name-only | sort)
+          test "$actual" = "$expected"
+          git commit -m 'security: remove simulated torrent connection surface'
+          git push origin HEAD:refs/heads/audit/pr-06-torrent-connect-surface --force
+          echo "candidate_sha=$(git rev-parse HEAD)"
