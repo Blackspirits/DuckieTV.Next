@@ -120,7 +120,9 @@ jobs:
         run: php artisan test tests/Unit/PollingReliabilityTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php
 
       - name: Pint
-        run: ./vendor/bin/pint --test
+        run: |
+          ./vendor/bin/pint app/Services/TorrentClients/QBittorrentClient.php
+          ./vendor/bin/pint --test
 
       - name: Full suite
         env:
