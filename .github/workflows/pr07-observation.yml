@@ -15,14 +15,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Verify product prerequisite
         env:
           PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
         run: |
-          test "$(git rev-parse HEAD^)" = "$PR06"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/pr07-observation.yml"
+          test "$(git diff --name-only "$PR06" HEAD)" = ".github/workflows/pr07-observation.yml"
 
       - name: Observe overlapping baseline polling
         run: |
