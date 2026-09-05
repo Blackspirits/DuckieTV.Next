@@ -38,20 +38,9 @@ jobs:
           git reset --hard "$PR07"
           test "$(git rev-parse HEAD)" = "$PR07"
 
-      - name: Apply candidate and narrow synchronous HTTP response
+      - name: Apply candidate
         run: |
           python /tmp/pr08-build.py
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('app/Services/TorrentSearchEngines/GenericSearchEngine.php')
-          text = path.read_text()
-          old = """            ])->withoutRedirecting()->get($url);\n\n            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {\n"""
-          new = """            ])->withoutRedirecting()->get($url);\n\n            if (! $response instanceof Response) {\n                throw new Exception(\"Unexpected asynchronous response while fetching details for {$this->name}\");\n            }\n\n            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {\n"""
-          if text.count(old) != 1:
-              raise SystemExit(f'expected synchronous response marker once, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
-          PY
           git diff --check
 
       - name: Verify exact candidate surface
