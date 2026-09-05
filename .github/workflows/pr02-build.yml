@@ -1,0 +1,184 @@
+name: PR02 Trakt redaction builder
+
+on:
+  pull_request:
+    branches:
+      - audit/pr-01-nativephp-loopback
+
+permissions:
+  contents: write
+
+jobs:
+  build-candidate:
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: c3d5ff59cad136394206cf6b9f4f0b0f0c16d349
+      TARGET_BRANCH: audit/pr-02-trakt-log-redaction
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Create clean PR02 worktree and apply scoped patch
+        run: |
+          git switch --detach "$BASE_SHA"
+          git switch -c "$TARGET_BRANCH"
+          python <<'PY'
+          from pathlib import Path
+
+          service = Path('app/Services/TraktService.php')
+          source = service.read_text()
+
+          replacements = {
+              'Log::info("TraktService GET: {$url}", [\'headers\' => $this->getHeaders($needsAuth)]);':
+                  'Log::info("TraktService GET: {$url}", [\'authenticated\' => $needsAuth]);',
+              "throw new \\RuntimeException('Trakt login failed: '.$response->body());":
+                  'throw new \\RuntimeException("Trakt login failed (HTTP {$response->status()})");',
+              "Log::error('Trakt: Token renewal failed: '.$response->body());":
+                  "Log::error('Trakt: Token renewal failed', ['status' => $response->status()]);",
+          }
+
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of {old!r}, got {count}')
+              source = source.replace(old, new)
+
+          service.write_text(source)
+
+          tests = Path('tests/Feature/Services/TraktServiceTest.php')
+          source = tests.read_text()
+
+          import_old = 'use Illuminate\\Support\\Facades\\Http;\n'
+          import_new = 'use Illuminate\\Support\\Facades\\Http;\nuse Illuminate\\Support\\Facades\\Log;\n'
+          if source.count(import_old) != 1 or 'use Illuminate\\Support\\Facades\\Log;' in source:
+              raise SystemExit('Unexpected TraktServiceTest import state')
+          source = source.replace(import_old, import_new, 1)
+
+          marker = """it('handles trending with cache', function () {\n"""
+          if source.count(marker) != 1:
+              raise SystemExit('Expected one trending-test insertion marker')
+
+          regressions = r'''it('does not log bearer token on authenticated get', function () {
+              $token = 'sensitive_access_token';
+              $this->settings->set('trakttv.token', $token);
+              Log::spy();
+
+              Http::fake([
+                  'api.trakt.tv/sync/watched/shows*' => Http::response([]),
+              ]);
+
+              $this->trakt->watched();
+
+              Log::shouldHaveReceived('info')
+                  ->once()
+                  ->withArgs(function (string $message, array $context) use ($token) {
+                      return str_starts_with($message, 'TraktService GET:')
+                          && ($context['authenticated'] ?? null) === true
+                          && ! array_key_exists('headers', $context)
+                          && ! str_contains($message, $token)
+                          && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $token);
+                  });
+          });
+
+          it('does not expose oauth response body on login failure', function () {
+              $sensitive = 'oauth_response_secret';
+
+              Http::fake([
+                  'api.trakt.tv/oauth/token*' => Http::response([
+                      'error' => 'invalid_grant',
+                      'access_token' => $sensitive,
+                  ], 400),
+              ]);
+
+              try {
+                  $this->trakt->login('invalid-pin');
+              } catch (RuntimeException $exception) {
+                  expect($exception->getMessage())->toBe('Trakt login failed (HTTP 400)')
+                      ->and($exception->getMessage())->not->toContain($sensitive);
+
+                  return;
+              }
+
+              throw new RuntimeException('Expected Trakt login to fail');
+          });
+
+          it('does not log oauth response body on token renewal failure', function () {
+              $sensitive = 'oauth_refresh_response_secret';
+              $this->settings->set('trakttv.refresh_token', 'stored_refresh_token');
+              Log::spy();
+
+              Http::fake([
+                  'api.trakt.tv/oauth/token*' => Http::response([
+                      'error' => 'invalid_grant',
+                      'refresh_token' => $sensitive,
+                  ], 400),
+              ]);
+
+              expect($this->trakt->renewToken())->toBeNull();
+
+              Log::shouldHaveReceived('error')
+                  ->once()
+                  ->with('Trakt: Token renewal failed', ['status' => 400]);
+              Log::shouldNotHaveReceived('error')
+                  ->withArgs(function (string $message, array $context = []) use ($sensitive) {
+                      return str_contains($message, $sensitive)
+                          || str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
+                  });
+          });
+
+          '''
+
+          source = source.replace(marker, regressions + marker, 1)
+          tests.write_text(source)
+          PY
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Format and verify scoped files
+        run: |
+          ./vendor/bin/pint app/Services/TraktService.php tests/Feature/Services/TraktServiceTest.php
+          ./vendor/bin/pint --test app/Services/TraktService.php tests/Feature/Services/TraktServiceTest.php
+
+      - name: Run Trakt regression tests
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+          php artisan test tests/Feature/Services/TraktServiceTest.php
+
+      - name: Verify candidate scope
+        run: |
+          changed="$(git diff --name-only | sort)"
+          printf 'Changed files before commit:\n%s\n' "$changed"
+          expected=$'app/Services/TraktService.php\ntests/Feature/Services/TraktServiceTest.php'
+          test "$changed" = "$expected"
+          git diff --check
+          git diff -- app/Services/TraktService.php tests/Feature/Services/TraktServiceTest.php > pr02-clean.diff
+
+      - name: Commit clean PR02 branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/Services/TraktService.php tests/Feature/Services/TraktServiceTest.php
+          git commit -m "security: redact Trakt authentication logs"
+          git rev-parse HEAD > pr02-branch-sha.txt
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr02-trakt-redaction-candidate
+          path: |
+            pr02-clean.diff
+            pr02-branch-sha.txt
+          if-no-files-found: error
