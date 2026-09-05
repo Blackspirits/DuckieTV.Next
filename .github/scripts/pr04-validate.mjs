@@ -24,6 +24,9 @@ const testsWorkflow = fs.readFileSync('.github/workflows/Tests.yml', 'utf8');
 
 assert(!pkg.scripts?.dev, 'package.json must not launch a duplicate dev process tree');
 assert(pkg.devDependencies.concurrently === '^9.2.4', 'concurrently minimum must be ^9.2.4');
+assert(pkg.devDependencies['laravel-echo'] === '^2.3.0', 'laravel-echo manifest range must remain unchanged');
+assert(pkg.devDependencies['pusher-js'] === '^8.4.0', 'pusher-js manifest range must remain unchanged');
+assert(pkg.devDependencies.tailwindcss === '^4.0.0', 'tailwindcss manifest range must remain unchanged');
 
 const setup = composer.scripts.setup;
 assert(Array.isArray(setup), 'composer setup must remain an array');
@@ -58,21 +61,28 @@ assert(!lock.packages['node_modules/vite'], 'stale Vite closure must be gone');
 assert(!lock.packages['node_modules/@tailwindcss/vite'], 'stale @tailwindcss/vite closure must be gone');
 assert(!lock.packages['node_modules/laravel-vite-plugin'], 'stale laravel-vite-plugin closure must be gone');
 
-const concurrentlyVersion = lock.packages['node_modules/concurrently']?.version;
-const shellQuoteVersion = lock.packages['node_modules/shell-quote']?.version;
-assert(concurrentlyVersion, 'concurrently must exist in the resolved lock');
-assert(shellQuoteVersion, 'shell-quote must exist in the resolved lock');
-assert(atLeast(concurrentlyVersion, '9.2.4'), `concurrently ${concurrentlyVersion} is too old`);
-assert(atLeast(shellQuoteVersion, '1.9.0'), `shell-quote ${shellQuoteVersion} remains vulnerable`);
+const versions = {
+    concurrently: lock.packages['node_modules/concurrently']?.version,
+    'shell-quote': lock.packages['node_modules/shell-quote']?.version,
+    'laravel-echo': lock.packages['node_modules/laravel-echo']?.version,
+    'pusher-js': lock.packages['node_modules/pusher-js']?.version,
+    tailwindcss: lock.packages['node_modules/tailwindcss']?.version,
+};
+
+for (const [name, version] of Object.entries(versions)) {
+    assert(version, `${name} must exist in the resolved lock`);
+}
+assert(atLeast(versions.concurrently, '9.2.4'), `concurrently ${versions.concurrently} is too old`);
+assert(atLeast(versions['shell-quote'], '1.9.0'), `shell-quote ${versions['shell-quote']} remains vulnerable`);
+assert(versions['laravel-echo'] === '2.3.0', `laravel-echo drifted to ${versions['laravel-echo']}`);
+assert(versions['pusher-js'] === '8.4.0', `pusher-js drifted to ${versions['pusher-js']}`);
+assert(versions.tailwindcss === '4.1.18', `tailwindcss drifted to ${versions.tailwindcss}`);
 
 for (const stalePeer of ['socket.io-client', 'engine.io-client', 'ws']) {
     assert(!lock.packages[`node_modules/${stalePeer}`], `${stalePeer} should not remain in the reconciled unused peer closure`);
 }
 
 console.log(JSON.stringify({
-    versions: {
-        concurrently: concurrentlyVersion,
-        'shell-quote': shellQuoteVersion,
-    },
+    versions,
     removedUnusedPeerClosure: ['socket.io-client', 'engine.io-client', 'ws'],
 }, null, 2));
