@@ -22,7 +22,7 @@ jobs:
           extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
 
       - name: Resolve NativePHP lock without scripts
-        run: composer update nativephp/desktop --with-dependencies --no-scripts --no-interaction --prefer-dist
+        run: composer update nativephp/desktop --no-scripts --no-interaction --prefer-dist
 
       - name: Validate Composer files
         run: composer validate --strict
