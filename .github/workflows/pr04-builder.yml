@@ -49,7 +49,7 @@ jobs:
       - name: Rebuild npm lock without unrelated upgrades
         run: |
           rm package-lock.json
-          npm install --package-lock-only --legacy-peer-deps \
+          npm install --package-lock-only \
             concurrently@9.2.4 \
             laravel-echo@2.3.0 \
             pusher-js@8.4.0 \
@@ -73,7 +73,7 @@ jobs:
         run: node /tmp/pr04-validate.mjs
 
       - name: Install npm dependencies reproducibly
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Record critical dependency closure
         run: npm ls concurrently shell-quote socket.io-client engine.io-client ws | tee /tmp/npm-ls.txt
@@ -90,7 +90,7 @@ jobs:
       - name: Exercise clean composer setup
         run: |
           rm -rf vendor node_modules .env database/database.sqlite
-          npm_config_legacy_peer_deps=true composer run setup
+          composer run setup
           test -f .env
           test -f database/database.sqlite
           test -d vendor
