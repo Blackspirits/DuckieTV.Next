@@ -164,7 +164,6 @@ test.write_text(r'''<?php
 use App\Services\TorrentSearchEngines\GenericSearchEngine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 
 uses(RefreshDatabase::class);
 
@@ -223,7 +222,7 @@ it('rejects a different public origin', function () {
     Http::fake();
 
     expect(fn () => makeDetailsEngine()->getDetails('https://other.example/details/1', 'release'))
-        ->toThrow(InvalidArgumentException::class);
+        ->toThrow(\InvalidArgumentException::class);
 
     Http::assertNothingSent();
 });
@@ -232,7 +231,7 @@ it('rejects an alternate port on the configured host', function () {
     Http::fake();
 
     expect(fn () => makeDetailsEngine()->getDetails('https://mirror.example:8443/details/1', 'release'))
-        ->toThrow(InvalidArgumentException::class);
+        ->toThrow(\InvalidArgumentException::class);
 
     Http::assertNothingSent();
 });
@@ -241,7 +240,7 @@ it('rejects configured private IPv4 and IPv6 literal mirrors', function (string 
     Http::fake();
 
     expect(fn () => makeDetailsEngine($mirror)->getDetails($url, 'release'))
-        ->toThrow(InvalidArgumentException::class);
+        ->toThrow(\InvalidArgumentException::class);
 
     Http::assertNothingSent();
 })->with([
@@ -275,7 +274,7 @@ it('rejects a redirect to another origin before following it', function () {
     ]);
 
     expect(fn () => makeDetailsEngine()->getDetails('https://mirror.example/details/start', 'release'))
-        ->toThrow(InvalidArgumentException::class);
+        ->toThrow(\InvalidArgumentException::class);
 
     Http::assertSentCount(1);
 });
