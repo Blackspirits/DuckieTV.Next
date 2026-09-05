@@ -66,6 +66,7 @@ jobs:
 
       - name: Validate exact candidate surface
         run: |
+          rm -f .env.testing
           expected=$(printf '%s\n' \
             app/Http/Controllers/TorrentController.php \
             app/Jobs/AttemptTorrentConnection.php \
