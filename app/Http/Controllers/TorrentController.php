@@ -9,7 +9,6 @@ use App\Services\SettingsService;
 use App\Services\TorrentSearchService;
 use Exception;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -252,20 +251,6 @@ class TorrentController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
 
-    }
-
-    /**
-     * Attempt to connect to the configured torrent client.
-     */
-    public function connect(Request $request): JsonResponse
-    {
-        $config = $request->all();
-        $client = $config['torrenting.client'] ?? 'uTorrent';
-
-        \App\Events\TorrentConnectionStatus::dispatch('connecting', $client, 'Connecting to '.$client.'...');
-        \App\Jobs\AttemptTorrentConnection::dispatch($client, $config);
-
-        return response()->json(['success' => true, 'message' => 'Connection attempt started...']);
     }
 
     /**

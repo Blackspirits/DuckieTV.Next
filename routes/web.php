@@ -45,15 +45,6 @@ Route::patch('/episodes/{id}', [\App\Http\Controllers\EpisodeController::class, 
 Route::post('/episodes/{id}/auto-download', [\App\Http\Controllers\EpisodeController::class, 'autoDownload'])->name('episodes.auto-download');
 
 // Torrent Search
-Route::get('/debug-engines', function () {
-    $service = app(\App\Services\TorrentSearchService::class);
-
-    return response()->json([
-        'engines' => array_keys($service->getSearchEngines()),
-        'count' => count($service->getSearchEngines()),
-    ]);
-});
-
 Route::prefix('torrents')->group(function () {
     Route::get('/search-dialog', [\App\Http\Controllers\TorrentController::class, 'searchDialog'])->name('torrents.search-dialog');
     Route::get('/search', [\App\Http\Controllers\TorrentController::class, 'search'])->name('torrents.search');
@@ -61,7 +52,6 @@ Route::prefix('torrents')->group(function () {
     Route::get('/engines', [\App\Http\Controllers\TorrentController::class, 'engines'])->name('torrents.engines');
     Route::post('/add', [\App\Http\Controllers\TorrentController::class, 'add'])->name('torrents.add');
     Route::get('/status', [\App\Http\Controllers\TorrentController::class, 'status'])->name('torrents.status');
-    Route::post('/connect', [\App\Http\Controllers\TorrentController::class, 'connect'])->name('torrents.connect');
     Route::get('/', [\App\Http\Controllers\TorrentController::class, 'index'])->name('torrents.index');
     Route::get('/{infoHash}', [\App\Http\Controllers\TorrentController::class, 'show'])->name('torrents.show');
     Route::post('/{infoHash}/start', [\App\Http\Controllers\TorrentController::class, 'start'])->name('torrents.start');
