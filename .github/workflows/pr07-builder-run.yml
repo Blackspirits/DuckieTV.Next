@@ -36,6 +36,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
+          # Make the async visibility assertion deterministic without weakening it.
           path = Path('tests/Frontend/PollingReliability.mjs')
           text = path.read_text()
           old = """await Promise.resolve();\nawait Promise.resolve();\nawait Promise.resolve();\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
@@ -44,6 +45,7 @@ jobs:
               raise SystemExit('PollingReliability.mjs: expected visibility await block once')
           path.write_text(text.replace(old, new))
 
+          # This unit test needs the Laravel container for Cache/Crypt/Http facades.
           path = Path('tests/Unit/Services/QBittorrentSessionReuseTest.php')
           text = path.read_text()
           marker = "use Illuminate\\Support\\Facades\\Http;\n"
@@ -51,6 +53,17 @@ jobs:
           if text.count(marker) != 1:
               raise SystemExit('QBittorrentSessionReuseTest.php: expected Http import once')
           path.write_text(text.replace(marker, replacement, 1))
+
+          # Keep the getConfigMappings() array-shape PHPDoc attached to that method,
+          # not to the new PendingRequest helper. The misplaced docblock caused a
+          # 44-error Psalm cascade while runtime behavior remained correct.
+          path = Path('app/Services/TorrentClients/BaseTorrentClient.php')
+          text = path.read_text()
+          old = """    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    protected function getConfigMappings(): array\n"""
+          new = """    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function getConfigMappings(): array\n"""
+          if text.count(old) != 1:
+              raise SystemExit('BaseTorrentClient.php: expected misplaced getConfigMappings PHPDoc once')
+          path.write_text(text.replace(old, new, 1))
           PY
 
       - name: Verify exact candidate surface
@@ -130,7 +143,22 @@ jobs:
           DB_DATABASE: ":memory:"
         run: php artisan test
 
-      - name: Materialize candidate branch
+      - name: Psalm baseline guard
+        run: |
+          set +e
+          ./vendor/bin/psalm 2>&1 | tee /tmp/psalm.log
+          psalm_status=${PIPESTATUS[0]}
+          set -e
+          test "$psalm_status" -eq 2
+          errors="$(grep -oE '[0-9]+ errors found' /tmp/psalm.log | tail -1 | grep -oE '^[0-9]+')"
+          others="$(grep -oE '[0-9]+ other issues found' /tmp/psalm.log | tail -1 | grep -oE '^[0-9]+')"
+          test -n "$errors"
+          test -n "$others"
+          echo "Psalm candidate: errors=$errors other_issues=$others"
+          test "$errors" -le 597
+          test "$others" -le 776
+
+      - name: Materialize replacement candidate branch
         env:
           PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
         run: |
@@ -143,4 +171,4 @@ jobs:
           test "$(git rev-parse HEAD^)" = "$PR06"
           test "$(git diff --name-only "$PR06" HEAD | wc -l)" -eq 16
           test -z "$(git status --porcelain)"
-          git push origin HEAD:refs/heads/audit/pr-07-polling-reliability
+          git push --force-with-lease=refs/heads/audit/pr-07-polling-reliability:0af33f4154fd4ed85d0051b3eabc77db7d6888cf origin HEAD:refs/heads/audit/pr-07-polling-reliability
