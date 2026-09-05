@@ -74,12 +74,15 @@ namespace Tests\Feature\Controllers;
 
 use App\Services\TorrentClients\TorrentClientInterface;
 use App\Services\TorrentClientService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Mockery;
 use Tests\TestCase;
 
 class TorrentConnectionSurfaceTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_debug_engine_inventory_is_not_exposed_as_a_production_route(): void
     {
         $this->get('/debug-engines')->assertNotFound();
@@ -92,7 +95,7 @@ class TorrentConnectionSurfaceTest extends TestCase
         $this->postJson('/torrents/connect', [
             'torrenting.client' => 'Transmission',
             'transmission.password' => 'must-not-be-queued',
-        ])->assertNotFound();
+        ])->assertStatus(405);
     }
 
     public function test_torrent_settings_test_uses_the_registered_client_connection_path(): void
