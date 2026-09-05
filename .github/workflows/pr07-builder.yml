@@ -86,33 +86,10 @@ jobs:
         run: |
           php artisan test tests/Unit/PollingReliabilityTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php
 
-      - name: Pint
-        run: ./vendor/bin/pint --test
-
-      - name: Full suite
-        env:
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
-        run: php artisan test
-
-      - name: NPM audit
-        run: npm audit --audit-level=high
-
-      - name: Clean generated files and recheck surface
+      - name: Diagnose Pint formatting
         run: |
-          rm -f .env.testing
-          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual-final
-          diff -u /tmp/expected /tmp/actual-final
-
-      - name: Materialize final branch
-        env:
-          TARGET: audit/pr-07-polling-reliability
-        run: |
-          git config user.name 'BlackSpirits'
-          git config user.email 'blackspirits@gmail.com'
-          git switch -C "$TARGET"
-          git add $(cat /tmp/expected)
-          git commit -m 'perf: bound torrent status polling and client requests'
-          git push --force-with-lease origin "$TARGET"
-          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-          echo "candidate_files=$(git diff --name-only HEAD^ HEAD | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          cp app/Services/TorrentClients/QBittorrentClient.php /tmp/qb-before.php
+          ./vendor/bin/pint app/Services/TorrentClients/QBittorrentClient.php
+          echo '--- Pint formatter delta ---'
+          diff -u /tmp/qb-before.php app/Services/TorrentClients/QBittorrentClient.php || true
+          exit 1
