@@ -1,0 +1,115 @@
+name: PR07 Builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-07-builder'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Verify builder prerequisite and isolate script
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          test "$(git merge-base HEAD "$PR06")" = "$PR06"
+          cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+          git reset --hard "$PR06"
+          test "$(git rev-parse HEAD)" = "$PR06"
+
+      - name: Apply candidate
+        run: python /tmp/pr07-build.py
+
+      - name: Verify exact candidate surface
+        run: |
+          cat > /tmp/expected <<'EOF'
+          app/Services/TorrentClients/Aria2Client.php
+          app/Services/TorrentClients/BaseTorrentClient.php
+          app/Services/TorrentClients/DelugeClient.php
+          app/Services/TorrentClients/KTorrentClient.php
+          app/Services/TorrentClients/QBittorrentClient.php
+          app/Services/TorrentClients/RTorrentClient.php
+          app/Services/TorrentClients/TixatiClient.php
+          app/Services/TorrentClients/TransmissionClient.php
+          app/Services/TorrentClients/TTorrentClient.php
+          app/Services/TorrentClients/UTorrentClient.php
+          app/Services/TorrentClients/UTorrentWebUIClient.php
+          public/js/PollingService.js
+          tests/Frontend/PollingReliability.mjs
+          tests/Unit/PollingReliabilityTest.php
+          tests/Unit/Services/QBittorrentSessionReuseTest.php
+          tests/Unit/Services/TorrentClientHttpPolicyTest.php
+          EOF
+          git status --short
+          git diff --name-only | sort > /tmp/actual
+          sort /tmp/expected -o /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm ci
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Focused regressions
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          php artisan test tests/Unit/PollingReliabilityTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Full suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test
+
+      - name: NPM audit
+        run: npm audit --audit-level=high
+
+      - name: Clean generated files and recheck surface
+        run: |
+          rm -f .env.testing
+          git diff --name-only | sort > /tmp/actual-final
+          diff -u /tmp/expected /tmp/actual-final
+
+      - name: Materialize final branch
+        env:
+          TARGET: audit/pr-07-polling-reliability
+        run: |
+          git config user.name 'BlackSpirits'
+          git config user.email 'blackspirits@gmail.com'
+          git switch -C "$TARGET"
+          git add $(cat /tmp/expected)
+          git commit -m 'perf: bound torrent status polling and client requests'
+          git push --force-with-lease origin "$TARGET"
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate_files=$(git diff --name-only HEAD^ HEAD | wc -l)" >> "$GITHUB_STEP_SUMMARY"
