@@ -17,6 +17,12 @@ function atLeast(actual, minimum) {
     return true;
 }
 
+function packageVersions(name) {
+    return Object.entries(lock.packages)
+        .filter(([path, value]) => value?.version && (path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`)))
+        .map(([path, value]) => ({ path, version: value.version }));
+}
+
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const composer = JSON.parse(fs.readFileSync('composer.json', 'utf8'));
 const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
@@ -78,11 +84,25 @@ assert(versions['laravel-echo'] === '2.3.0', `laravel-echo drifted to ${versions
 assert(versions['pusher-js'] === '8.4.0', `pusher-js drifted to ${versions['pusher-js']}`);
 assert(versions.tailwindcss === '4.1.18', `tailwindcss drifted to ${versions.tailwindcss}`);
 
-for (const stalePeer of ['socket.io-client', 'engine.io-client', 'ws']) {
-    assert(!lock.packages[`node_modules/${stalePeer}`], `${stalePeer} should not remain in the reconciled unused peer closure`);
+const optionalPeerClosure = {
+    'socket.io-client': packageVersions('socket.io-client'),
+    'engine.io-client': packageVersions('engine.io-client'),
+    ws: packageVersions('ws'),
+};
+const anyOptionalPeer = Object.values(optionalPeerClosure).some((entries) => entries.length > 0);
+if (anyOptionalPeer) {
+    assert(optionalPeerClosure['socket.io-client'].length > 0, 'partial optional Socket.IO peer closure: socket.io-client missing');
+    assert(optionalPeerClosure['engine.io-client'].length > 0, 'partial optional Socket.IO peer closure: engine.io-client missing');
+    assert(optionalPeerClosure.ws.length > 0, 'partial optional Socket.IO peer closure: ws missing');
+    for (const entry of optionalPeerClosure['engine.io-client']) {
+        assert(atLeast(entry.version, '6.6.6'), `engine.io-client ${entry.version} at ${entry.path} is below safe baseline 6.6.6`);
+    }
+    for (const entry of optionalPeerClosure.ws) {
+        assert(atLeast(entry.version, '8.21.0'), `ws ${entry.version} at ${entry.path} is below safe baseline 8.21.0`);
+    }
 }
 
 console.log(JSON.stringify({
     versions,
-    removedUnusedPeerClosure: ['socket.io-client', 'engine.io-client', 'ws'],
+    optionalPeerClosure: anyOptionalPeer ? optionalPeerClosure : 'absent',
 }, null, 2));
