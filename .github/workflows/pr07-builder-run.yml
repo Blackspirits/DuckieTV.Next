@@ -134,6 +134,7 @@ jobs:
         env:
           PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
         run: |
+          rm -f .env.testing
           git status --porcelain
           git config user.name BlackSpirits
           git config user.email blackspirits@gmail.com
