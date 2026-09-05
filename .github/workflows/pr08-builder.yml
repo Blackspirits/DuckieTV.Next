@@ -1,0 +1,101 @@
+name: PR08 Builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-08-builder'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Verify builder prerequisite and isolate generator
+        env:
+          PR07: 898d0ed4341a623afcc920e76b249864bff1c19e
+        run: |
+          test "$(git merge-base HEAD "$PR07")" = "$PR07"
+          cp .github/scripts/pr08-build.py /tmp/pr08-build.py
+          git reset --hard "$PR07"
+          test "$(git rev-parse HEAD)" = "$PR07"
+
+      - name: Apply candidate
+        run: python /tmp/pr08-build.py
+
+      - name: Verify exact candidate surface
+        run: |
+          cat > /tmp/expected <<'EOF'
+          app/Http/Requests/TorrentDetailsRequest.php
+          app/Services/TorrentSearchEngines/GenericSearchEngine.php
+          tests/Feature/TorrentDetailsTrustBoundaryTest.php
+          EOF
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual
+          sort /tmp/expected -o /tmp/expected
+          git status --short
+          diff -u /tmp/expected /tmp/actual
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm ci
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Focused regression
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test tests/Feature/TorrentDetailsTrustBoundaryTest.php
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Full suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test
+
+      - name: NPM audit
+        run: npm audit --audit-level=high
+
+      - name: Clean generated files and recheck surface
+        run: |
+          rm -f .env.testing
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual-final
+          diff -u /tmp/expected /tmp/actual-final
+
+      - name: Materialize final branch
+        env:
+          TARGET: audit/pr-08-torrent-detail-trust
+        run: |
+          git config user.name 'BlackSpirits'
+          git config user.email 'blackspirits@gmail.com'
+          git switch -C "$TARGET"
+          git add $(cat /tmp/expected)
+          git commit -m 'security: constrain torrent detail fetch origin'
+          git push --force-with-lease origin "$TARGET"
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate_files=$(git diff --name-only HEAD^ HEAD | wc -l)" >> "$GITHUB_STEP_SUMMARY"
