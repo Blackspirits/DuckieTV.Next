@@ -29,17 +29,20 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Verify builder prerequisite and isolate script
+      - name: Verify builder prerequisite and isolate scripts
         env:
           PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
         run: |
           test "$(git merge-base HEAD "$PR06")" = "$PR06"
           cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+          cp .github/scripts/pr07-build-fixes.py /tmp/pr07-build-fixes.py
           git reset --hard "$PR06"
           test "$(git rev-parse HEAD)" = "$PR06"
 
       - name: Apply candidate
-        run: python /tmp/pr07-build.py
+        run: |
+          python /tmp/pr07-build.py
+          python /tmp/pr07-build-fixes.py
 
       - name: Verify exact candidate surface
         run: |
