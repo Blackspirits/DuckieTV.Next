@@ -131,7 +131,13 @@ class PollingService {
             // Show error in panel if it's open and showing connecting
             if (panel && panel.querySelector('.connecting-message') && data.error) {
                 const msg = panel.querySelector('.connecting-message strong');
-                if (msg) msg.innerHTML = `<span class="text-danger">${data.error}</span>`;
+                if (msg) {
+                    msg.textContent = '';
+                    const errorText = document.createElement('span');
+                    errorText.className = 'text-danger';
+                    errorText.textContent = String(data.error);
+                    msg.appendChild(errorText);
+                }
             }
         }
     }
