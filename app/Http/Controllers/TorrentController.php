@@ -201,18 +201,11 @@ class TorrentController extends Controller
                 $infoHash = \App\Support\MagnetUri::extractInfoHash($request->validated('magnet'));
             }
 
-            // Link to episode if provided
+            // Resolve the episode now, but do not mutate local state until the external add succeeds.
+            $episode = null;
             if ($episodeId) {
                 /** @var \App\Models\Episode|null $episode */
                 $episode = \App\Models\Episode::find($episodeId);
-                if ($episode) {
-                    // Update magnetHash if we found one (either passed or extracted)
-                    if ($infoHash) {
-                        $episode->update(['magnetHash' => $infoHash]);
-                    }
-                    $episode->markDownloaded();
-                    // Optional: You might want to dispatch an event here if needed
-                }
             }
 
             if ($request->has('magnet')) {
@@ -229,15 +222,31 @@ class TorrentController extends Controller
                 return response()->json(['error' => 'No magnet or URL provided'], 422);
             }
 
-            if ($success) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Torrent added successfully',
-                    'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
-                ]);
+            if (! $success) {
+                return response()->json(['error' => 'Failed to add torrent to client'], 422);
             }
 
-            return response()->json(['error' => 'Failed to add torrent to client'], 422);
+            if ($episode) {
+                try {
+                    \Illuminate\Support\Facades\DB::transaction(function () use ($episode, $infoHash) {
+                        if ($infoHash) {
+                            $episode->update(['magnetHash' => $infoHash]);
+                        }
+                        $episode->markDownloaded();
+                    });
+                } catch (Exception) {
+                    return response()->json([
+                        'error' => 'Torrent added, but failed to update episode state',
+                        'torrent_added' => true,
+                    ], 500);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Torrent added successfully',
+                'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
+            ]);
 
         } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
