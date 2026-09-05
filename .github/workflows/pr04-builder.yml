@@ -46,10 +46,8 @@ jobs:
       - name: Apply PR04 contract
         run: node /tmp/pr04-build.mjs
 
-      - name: Regenerate npm lock from manifest
-        run: |
-          rm package-lock.json
-          npm install --package-lock-only
+      - name: Reconcile npm lock minimally
+        run: npm install --package-lock-only concurrently@9.2.4
 
       - name: Validate setup and lock contract
         run: node /tmp/pr04-validate.mjs
