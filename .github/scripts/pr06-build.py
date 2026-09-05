@@ -106,7 +106,7 @@ class TorrentConnectionSurfaceTest extends TestCase
         $client->shouldReceive('getName')->once()->andReturn('MockClient');
 
         $service = Mockery::mock(TorrentClientService::class);
-        $service->shouldReceive('getAvailableClients')->once()->andReturn([]);
+        $service->shouldReceive('getAvailableClients')->andReturn([]);
         $service->shouldReceive('getActiveClient')->once()->andReturn($client);
         $this->app->instance(TorrentClientService::class, $service);
 
