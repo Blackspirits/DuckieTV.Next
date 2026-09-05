@@ -1,0 +1,94 @@
+name: PR08 Baseline Observation
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    if: github.head_ref == 'audit/pr-08-observation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify product prerequisite
+        env:
+          PR07: 898d0ed4341a623afcc920e76b249864bff1c19e
+        run: |
+          test "$(git diff --name-only "$PR07" HEAD)" = ".github/workflows/pr08-observation.yml"
+
+      - name: Inventory details-capable engines
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+          rows=[]
+          for path in sorted(Path('app/Services/TorrentSearchEngines').glob('*Engine.php')):
+              text=path.read_text()
+              if "'detailsSelectors'" not in text:
+                  continue
+              name=re.search(r"'name'\s*=>\s*'([^']+)'", text)
+              mirror=re.search(r"'mirror'\s*=>\s*\$settings->get\([^,]+,\s*'([^']+)'", text)
+              include=re.search(r"'includeBaseURL'\s*=>\s*(true|false)", text)
+              rows.append((path.name, name.group(1) if name else '?', mirror.group(1) if mirror else '?', include.group(1) if include else 'false/implicit'))
+          print('details-capable engines:', len(rows))
+          for row in rows:
+              print(' | '.join(row))
+          if not rows:
+              raise SystemExit('no details-capable engines found')
+          PY
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Reproduce arbitrary server-side details fetch
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          cat > tests/Feature/PR08BaselineObservationTest.php <<'PHP'
+          <?php
+
+          use Illuminate\Foundation\Testing\RefreshDatabase;
+          use Illuminate\Support\Facades\Http;
+
+          uses(RefreshDatabase::class);
+
+          it('currently permits a details request to reach a loopback URL', function () {
+              Http::fake([
+                  'http://127.0.0.1/*' => Http::response('<html></html>', 200),
+              ]);
+
+              $response = $this->post('/torrents/details', [
+                  'engine' => '1337x',
+                  'url' => 'http://127.0.0.1/internal/status',
+                  'releasename' => 'baseline-observation',
+              ]);
+
+              $response->assertOk();
+              Http::assertSent(fn ($request) => $request->url() === 'http://127.0.0.1/internal/status');
+          });
+          PHP
+          php artisan test tests/Feature/PR08BaselineObservationTest.php
+
+      - name: Evidence boundary
+        run: |
+          echo 'This run proves local request acceptance reaches Laravel HTTP for a loopback target under Http::fake.'
+          echo 'It does not prove hostile-origin reachability, real network access, redirect behavior, or exploitability.'
