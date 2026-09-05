@@ -33,6 +33,16 @@ jobs:
           git reset --hard "$PR06"
           git clean -fdx
           python /tmp/pr07-build.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/Frontend/PollingReliability.mjs')
+          text = path.read_text()
+          old = """await Promise.resolve();\nawait Promise.resolve();\nawait Promise.resolve();\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
+          new = """for (let i = 0; i < 20 && visibilityService.inFlight; i += 1) {\n    await Promise.resolve();\n}\nif (visibilityService.inFlight) throw new Error('visible resumed poll did not settle');\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
+          if text.count(old) != 1:
+              raise SystemExit('PollingReliability.mjs: expected visibility await block once')
+          path.write_text(text.replace(old, new))
+          PY
 
       - name: Verify exact candidate surface
         run: |
