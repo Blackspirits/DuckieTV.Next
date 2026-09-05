@@ -17,13 +17,36 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Generate fixed PR07 candidate in worktree
+      - name: Preserve PR07 generator
+        run: cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+
+      - name: Checkout exact PR06 baseline
         env:
           PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
         run: |
-          cp .github/scripts/pr07-build.py /tmp/pr07-build.py
           git reset --hard "$PR06"
           git clean -fdx
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Capture baseline Psalm JSON
+        run: |
+          set +e
+          ./vendor/bin/psalm --show-info=true --output-format=json > /tmp/baseline.json
+          status=$?
+          set -e
+          echo "baseline_status=$status"
+          test "$status" -eq 2
+
+      - name: Generate corrected PR07 candidate
+        run: |
           python /tmp/pr07-build.py
           python - <<'PY'
           from pathlib import Path
@@ -44,24 +67,59 @@ jobs:
           path.write_text(text.replace(marker, "    #[\\Override]\n" + marker, 1))
           PY
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-
-      - name: Show PR07 Psalm diagnostics
+      - name: Capture candidate Psalm JSON
         run: |
           set +e
-          ./vendor/bin/psalm --show-info=true 2>&1 | tee /tmp/psalm-info.log
-          status=${PIPESTATUS[0]}
+          ./vendor/bin/psalm --show-info=true --output-format=json > /tmp/candidate.json
+          status=$?
           set -e
-          echo "psalm_status=$status"
-          echo '--- PR07 changed-file diagnostics ---'
-          grep -E 'app/Services/TorrentClients/(Aria2Client|BaseTorrentClient|DelugeClient|KTorrentClient|QBittorrentClient|RTorrentClient|TixatiClient|TransmissionClient|TTorrentClient|UTorrentClient|UTorrentWebUIClient)\.php' /tmp/psalm-info.log || true
-          echo '--- aggregate ---'
-          grep -E '[0-9]+ errors found|[0-9]+ other issues found' /tmp/psalm-info.log | tail -2
+          echo "candidate_status=$status"
           test "$status" -eq 2
+
+      - name: Compare diagnostic multisets
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          def load(path):
+              raw = json.loads(Path(path).read_text())
+              if isinstance(raw, dict):
+                  for key in ('issues', 'errors'):
+                      if isinstance(raw.get(key), list):
+                          raw = raw[key]
+                          break
+              if not isinstance(raw, list):
+                  raise SystemExit(f'unexpected Psalm JSON shape in {path}: {type(raw).__name__}')
+              return raw
+
+          def norm(item):
+              file_name = item.get('file_name') or item.get('file_path') or item.get('file') or ''
+              issue_type = item.get('type') or item.get('issue_type') or ''
+              message = item.get('message') or item.get('description') or ''
+              severity = item.get('severity') or 'error'
+              return (file_name, issue_type, message, severity)
+
+          baseline = load('/tmp/baseline.json')
+          candidate = load('/tmp/candidate.json')
+          b = Counter(map(norm, baseline))
+          c = Counter(map(norm, candidate))
+          added = c - b
+          removed = b - c
+
+          def counts(items):
+              out = Counter()
+              for item in items:
+                  out[item.get('severity') or 'error'] += 1
+              return out
+
+          print('BASELINE_JSON_COUNTS', dict(counts(baseline)))
+          print('CANDIDATE_JSON_COUNTS', dict(counts(candidate)))
+          print('ADDED_COUNT', sum(added.values()))
+          for diag, n in sorted(added.items()):
+              print('ADDED', n, *diag, sep=' | ')
+          print('REMOVED_COUNT', sum(removed.values()))
+          for diag, n in sorted(removed.items()):
+              print('REMOVED', n, *diag, sep=' | ')
+          PY
