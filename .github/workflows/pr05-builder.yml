@@ -50,6 +50,7 @@ jobs:
 
       - name: Candidate surface
         run: |
+          git add -N tests/Frontend/SafeErrorRendering.mjs tests/Unit/FrontendErrorRenderingTest.php
           git diff --check
           mapfile -t files < <(git diff --name-only 1c442c3b9a406de4a298da7157c4445df6ca9aaf)
           printf '%s\n' "${files[@]}"
