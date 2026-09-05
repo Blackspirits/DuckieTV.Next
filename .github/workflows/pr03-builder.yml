@@ -1,0 +1,317 @@
+name: PR03 torrent state-ordering builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_SHA: e010493fa541e37d20dc654cee35fb23333dd2a7
+      CLEAN_BRANCH: audit/pr-03-torrent-state-ordering
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Reset to exact prerequisite and install dependencies
+        run: |
+          git checkout --detach "$BASE_SHA"
+          composer install --no-interaction --prefer-dist
+
+      - name: Apply DTV-006 patch and regressions
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          controller = Path('app/Http/Controllers/TorrentController.php')
+          s = controller.read_text()
+
+          old_link = '''            // Link to episode if provided
+            if ($episodeId) {
+                /** @var \\App\\Models\\Episode|null $episode */
+                $episode = \\App\\Models\\Episode::find($episodeId);
+                if ($episode) {
+                    // Update magnetHash if we found one (either passed or extracted)
+                    if ($infoHash) {
+                        $episode->update(['magnetHash' => $infoHash]);
+                    }
+                    $episode->markDownloaded();
+                    // Optional: You might want to dispatch an event here if needed
+                }
+            }
+'''
+          new_link = '''            // Resolve the episode now, but do not mutate local state until the external add succeeds.
+            $episode = null;
+            if ($episodeId) {
+                /** @var \\App\\Models\\Episode|null $episode */
+                $episode = \\App\\Models\\Episode::find($episodeId);
+            }
+'''
+          if old_link not in s:
+              raise SystemExit('episode pre-mutation block not found')
+          s = s.replace(old_link, new_link, 1)
+
+          old_result = '''            if ($success) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Torrent added successfully',
+                    'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
+                ]);
+            }
+
+            return response()->json(['error' => 'Failed to add torrent to client'], 422);
+'''
+          new_result = '''            if (! $success) {
+                return response()->json(['error' => 'Failed to add torrent to client'], 422);
+            }
+
+            if ($episode) {
+                try {
+                    \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($episode, $infoHash) {
+                        if ($infoHash) {
+                            $episode->update(['magnetHash' => $infoHash]);
+                        }
+                        $episode->markDownloaded();
+                    });
+                } catch (Exception) {
+                    return response()->json([
+                        'error' => 'Torrent added, but failed to update episode state',
+                        'torrent_added' => true,
+                    ], 500);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Torrent added successfully',
+                'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
+            ]);
+'''
+          if old_result not in s:
+              raise SystemExit('success/result block not found')
+          s = s.replace(old_result, new_result, 1)
+          controller.write_text(s)
+
+          test = Path('tests/Feature/Controllers/TorrentAddTest.php')
+          t = test.read_text()
+          t = t.replace('use App\\Services\\TorrentClients\\TorrentClientInterface;\n', 'use App\\Models\\Episode;\nuse App\\Models\\Serie;\nuse App\\Services\\TorrentClients\\TorrentClientInterface;\n', 1)
+
+          marker = '\n}\n'
+          if not t.endswith(marker):
+              raise SystemExit('unexpected TorrentAddTest class ending')
+
+          extra = r'''
+
+    private function createEpisode(): Episode
+    {
+        $serie = Serie::create([
+            'name' => 'State Ordering Test',
+            'trakt_id' => 91001,
+        ]);
+
+        return Episode::create([
+            'serie_id' => $serie->id,
+            'seasonnumber' => 1,
+            'episodenumber' => 1,
+            'trakt_id' => 91002,
+        ]);
+    }
+
+    private function bindClient(TorrentClientInterface $client): void
+    {
+        $mockService = Mockery::mock(TorrentClientService::class);
+        $mockService->shouldReceive('getActiveClient')->andReturn($client);
+        $this->app->instance(TorrentClientService::class, $mockService);
+    }
+
+    public function test_magnet_success_updates_episode_only_after_client_accepts_torrent(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '0123456789abcdef0123456789abcdef01234567';
+        $magnet = 'magnet:?xt=urn:btih:'.$hash;
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andReturn(true);
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'magnet' => $magnet,
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertOk()->assertJson(['success' => true]);
+        $episode->refresh();
+
+        $this->assertTrue($episode->isDownloaded());
+        $this->assertSame(strtoupper($hash), $episode->magnetHash);
+    }
+
+    public function test_magnet_false_result_leaves_episode_unchanged(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '1111111111111111111111111111111111111111';
+        $magnet = 'magnet:?xt=urn:btih:'.$hash;
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andReturn(false);
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'magnet' => $magnet,
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertStatus(422);
+        $episode->refresh();
+
+        $this->assertFalse($episode->isDownloaded());
+        $this->assertNull($episode->magnetHash);
+    }
+
+    public function test_magnet_exception_leaves_episode_unchanged(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '2222222222222222222222222222222222222222';
+        $magnet = 'magnet:?xt=urn:btih:'.$hash;
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andThrow(new \RuntimeException('client add failed'));
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'magnet' => $magnet,
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertStatus(500)->assertJson(['error' => 'client add failed']);
+        $episode->refresh();
+
+        $this->assertFalse($episode->isDownloaded());
+        $this->assertNull($episode->magnetHash);
+    }
+
+    public function test_url_success_updates_episode_only_after_client_accepts_torrent(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '3333333333333333333333333333333333333333';
+        $url = 'http://example.com/state-ordering.torrent';
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addTorrentByUrl')
+            ->with($url, $hash, 'State.Ordering', null, 'DuckieTV')
+            ->andReturn(true);
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'url' => $url,
+            'infoHash' => $hash,
+            'releaseName' => 'State.Ordering',
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertOk()->assertJson(['success' => true]);
+        $episode->refresh();
+
+        $this->assertTrue($episode->isDownloaded());
+        $this->assertSame($hash, $episode->magnetHash);
+    }
+
+    public function test_url_false_result_leaves_episode_unchanged(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '4444444444444444444444444444444444444444';
+        $url = 'http://example.com/state-ordering-false.torrent';
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addTorrentByUrl')
+            ->with($url, $hash, 'State.Ordering.False', null, 'DuckieTV')
+            ->andReturn(false);
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'url' => $url,
+            'infoHash' => $hash,
+            'releaseName' => 'State.Ordering.False',
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertStatus(422);
+        $episode->refresh();
+
+        $this->assertFalse($episode->isDownloaded());
+        $this->assertNull($episode->magnetHash);
+    }
+
+    public function test_url_exception_leaves_episode_unchanged(): void
+    {
+        $episode = $this->createEpisode();
+        $hash = '5555555555555555555555555555555555555555';
+        $url = 'http://example.com/state-ordering-exception.torrent';
+
+        $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('addTorrentByUrl')
+            ->with($url, $hash, 'State.Ordering.Exception', null, 'DuckieTV')
+            ->andThrow(new \RuntimeException('client url add failed'));
+        $this->bindClient($mockClient);
+
+        $response = $this->postJson(route('torrents.add'), [
+            'url' => $url,
+            'infoHash' => $hash,
+            'releaseName' => 'State.Ordering.Exception',
+            'episode_id' => $episode->id,
+        ]);
+
+        $response->assertStatus(500)->assertJson(['error' => 'client url add failed']);
+        $episode->refresh();
+
+        $this->assertFalse($episode->isDownloaded());
+        $this->assertNull($episode->magnetHash);
+    }
+'''
+          t = t[:-len(marker)] + extra + marker
+          test.write_text(t)
+          PY
+
+      - name: Format and verify exact surface
+        run: |
+          ./vendor/bin/pint app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php
+          php -l app/Http/Controllers/TorrentController.php
+          php -l tests/Feature/Controllers/TorrentAddTest.php
+          git diff --check
+          printf '%s\n' app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php > /tmp/expected.txt
+          git diff --name-only | sort > /tmp/actual.txt
+          sort /tmp/expected.txt -o /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          ./vendor/bin/pint --test
+
+      - name: Run focused regression
+        run: php artisan test tests/Feature/Controllers/TorrentAddTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+
+      - name: Materialize clean candidate branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$CLEAN_BRANCH"
+          git add app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php
+          git commit -m 'fix: persist episode state after torrent add succeeds'
+          git push --force origin "$CLEAN_BRANCH"
