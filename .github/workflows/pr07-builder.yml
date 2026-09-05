@@ -62,7 +62,7 @@ jobs:
           tests/Unit/Services/TorrentClientHttpPolicyTest.php
           EOF
           git status --short
-          git diff --name-only | sort > /tmp/actual
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual
           sort /tmp/expected -o /tmp/expected
           diff -u /tmp/expected /tmp/actual
 
@@ -98,7 +98,7 @@ jobs:
       - name: Clean generated files and recheck surface
         run: |
           rm -f .env.testing
-          git diff --name-only | sort > /tmp/actual-final
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual-final
           diff -u /tmp/expected /tmp/actual-final
 
       - name: Materialize final branch
