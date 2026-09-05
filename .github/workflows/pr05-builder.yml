@@ -1,0 +1,69 @@
+name: PR05 Builder
+
+on:
+  push:
+    branches:
+      - audit/pr-05-builder-v2
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Reset and build exact candidate
+        run: |
+          cp .github/scripts/pr05-build.py /tmp/pr05-build.py
+          git reset --hard 1c442c3b9a406de4a298da7157c4445df6ca9aaf
+          test "$(git rev-parse HEAD)" = "1c442c3b9a406de4a298da7157c4445df6ca9aaf"
+          python /tmp/pr05-build.py
+
+      - name: Clean setup
+        run: composer run setup
+
+      - name: Direct frontend regression
+        run: node tests/Frontend/SafeErrorRendering.mjs
+
+      - name: Focused canonical regression
+        run: ./vendor/bin/pest tests/Unit/FrontendErrorRenderingTest.php
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Full Laravel suite
+        run: php artisan test
+
+      - name: Candidate surface
+        run: |
+          git diff --check
+          mapfile -t files < <(git diff --name-only 1c442c3b9a406de4a298da7157c4445df6ca9aaf)
+          printf '%s\n' "${files[@]}"
+          test "${#files[@]}" -eq 5
+          printf '%s\n' "${files[@]}" | grep -Fx 'public/js/BackupRestore.js'
+          printf '%s\n' "${files[@]}" | grep -Fx 'public/js/PollingService.js'
+          printf '%s\n' "${files[@]}" | grep -Fx 'public/js/SidePanel.js'
+          printf '%s\n' "${files[@]}" | grep -Fx 'tests/Frontend/SafeErrorRendering.mjs'
+          printf '%s\n' "${files[@]}" | grep -Fx 'tests/Unit/FrontendErrorRenderingTest.php'
+
+      - name: Materialize staging candidate
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/js/BackupRestore.js public/js/PollingService.js public/js/SidePanel.js tests/Frontend/SafeErrorRendering.mjs tests/Unit/FrontendErrorRenderingTest.php
+          git commit -m 'security: render frontend errors as text'
+          git push origin HEAD:refs/heads/audit/pr-05-safe-error-rendering-staging
