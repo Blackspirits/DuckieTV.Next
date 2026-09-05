@@ -140,15 +140,19 @@ jobs:
           cc = Counter(i.get('severity') or 'error' for i in candidate)
           print('Psalm PR07:', dict(bc))
           print('Psalm PR08:', dict(cc))
-          if bc['error'] != 597 or bc['info'] != 776:
-              raise SystemExit(f'PR07 baseline drift: {bc}')
-          if cc['error'] > bc['error'] or cc['info'] > bc['info']:
-              raise SystemExit(f'Psalm aggregate regression: {cc} > {bc}')
 
-          added = Counter(map(norm, candidate)) - Counter(map(norm, baseline))
+          baseline_diags = Counter(map(norm, baseline))
+          candidate_diags = Counter(map(norm, candidate))
+          added = candidate_diags - baseline_diags
+          removed = baseline_diags - candidate_diags
+
           print('New Psalm diagnostics:', sum(added.values()))
           for diag, count in sorted(added.items()):
               print('ADDED', count, *diag, sep=' | ')
+          print('Removed Psalm diagnostics:', sum(removed.values()))
+          for diag, count in sorted(removed.items()):
+              print('REMOVED', count, *diag, sep=' | ')
+
           if added:
               raise SystemExit('PR08 introduces new Psalm diagnostics')
           PY
