@@ -1,0 +1,68 @@
+name: PR03 state-ordering builder v2
+
+on:
+  push:
+    branches:
+      - audit/pr-03-builder
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_SHA: e010493fa541e37d20dc654cee35fb23333dd2a7
+      CLEAN_BRANCH: audit/pr-03-torrent-state-ordering
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve builder script
+        run: cp .github/scripts/pr03_build.py /tmp/pr03_build.py
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Reset to exact prerequisite and install dependencies
+        run: |
+          git checkout --detach "$BASE_SHA"
+          composer install --no-interaction --prefer-dist
+
+      - name: Apply DTV-006 patch and regressions
+        run: python /tmp/pr03_build.py
+
+      - name: Format and verify exact surface
+        run: |
+          ./vendor/bin/pint app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php
+          php -l app/Http/Controllers/TorrentController.php
+          php -l tests/Feature/Controllers/TorrentAddTest.php
+          git diff --check
+          printf '%s\n' app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php | sort > /tmp/expected.txt
+          git diff --name-only | sort > /tmp/actual.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          ./vendor/bin/pint --test
+
+      - name: Bootstrap canonical test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Run focused regression
+        run: php artisan test tests/Feature/Controllers/TorrentAddTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+
+      - name: Materialize clean candidate branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$CLEAN_BRANCH"
+          git add app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php
+          git commit -m 'fix: persist episode state after torrent add succeeds'
+          git push --force origin "$CLEAN_BRANCH"
