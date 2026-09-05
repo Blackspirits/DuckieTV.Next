@@ -1,0 +1,67 @@
+name: PR07 Psalm Diagnostic
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'audit/pr-07-psalm-diagnostic-run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Generate fixed PR07 candidate in worktree
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+          git reset --hard "$PR06"
+          git clean -fdx
+          python /tmp/pr07-build.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/Services/TorrentClients/BaseTorrentClient.php')
+          text = path.read_text()
+          old = """    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    protected function getConfigMappings(): array\n"""
+          new = """    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function getConfigMappings(): array\n"""
+          if text.count(old) != 1:
+              raise SystemExit('BaseTorrentClient docblock marker mismatch')
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path('app/Services/TorrentClients/QBittorrentClient.php')
+          text = path.read_text()
+          marker = "    public function readConfig(): void\n"
+          if text.count(marker) != 1:
+              raise SystemExit('QBittorrent readConfig marker mismatch')
+          path.write_text(text.replace(marker, "    #[\\Override]\n" + marker, 1))
+          PY
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Show PR07 Psalm diagnostics
+        run: |
+          set +e
+          ./vendor/bin/psalm --show-info=true 2>&1 | tee /tmp/psalm-info.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "psalm_status=$status"
+          echo '--- PR07 changed-file diagnostics ---'
+          grep -E 'app/Services/TorrentClients/(Aria2Client|BaseTorrentClient|DelugeClient|KTorrentClient|QBittorrentClient|RTorrentClient|TixatiClient|TransmissionClient|TTorrentClient|UTorrentClient|UTorrentWebUIClient)\.php' /tmp/psalm-info.log || true
+          echo '--- aggregate ---'
+          grep -E '[0-9]+ errors found|[0-9]+ other issues found' /tmp/psalm-info.log | tail -2
+          test "$status" -eq 2
