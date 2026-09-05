@@ -128,11 +128,11 @@ jobs:
 
               Log::shouldHaveReceived('error')
                   ->once()
-                  ->with('Trakt: Token renewal failed', ['status' => 400]);
-              Log::shouldNotHaveReceived('error')
-                  ->withArgs(function (string $message, array $context = []) use ($sensitive) {
-                      return str_contains($message, $sensitive)
-                          || str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
+                  ->withArgs(function (string $message, array $context) use ($sensitive) {
+                      return $message === 'Trakt: Token renewal failed'
+                          && $context === ['status' => 400]
+                          && ! str_contains($message, $sensitive)
+                          && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
                   });
           });
 
