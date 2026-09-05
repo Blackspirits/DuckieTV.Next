@@ -8,12 +8,21 @@ on:
     branches:
       - audit/pr-00b-codeql-control-plane
 
+permissions:
+  contents: write
+
 jobs:
   resolve-lock:
     runs-on: ubuntu-latest
 
+    env:
+      BASE_SHA: 3a6812dd3f68f0ec6b6a71c99621687b7b3677dd
+      TARGET_BRANCH: audit/pr-01-nativephp-loopback
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -21,28 +30,45 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
 
+      - name: Create clean PR01 worktree
+        run: |
+          git switch --detach "$BASE_SHA"
+          git switch -c "$TARGET_BRANCH"
+          php -r '$path="composer.json"; $source=file_get_contents($path); $updated=str_replace("\"nativephp/desktop\": \"^2.1\"", "\"nativephp/desktop\": \"^2.2.1\"", $source, $count); if ($count !== 1) { fwrite(STDERR, "Expected exactly one NativePHP constraint replacement, got {$count}\n"); exit(1); } file_put_contents($path, $updated);'
+
       - name: Resolve NativePHP lock without scripts
         run: composer update nativephp/desktop --no-scripts --no-interaction --prefer-dist
 
       - name: Validate Composer files
         run: composer validate --strict
 
-      - name: Verify NativePHP version
+      - name: Verify NativePHP version and scope
         run: |
           php -r '$lock=json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); foreach ($lock["packages"] as $package) { if ($package["name"] === "nativephp/desktop") { if ($package["version"] !== "2.2.1") { fwrite(STDERR, "Expected nativephp/desktop 2.2.1, got {$package["version"]}\n"); exit(1); } echo "nativephp/desktop={$package["version"]}\n"; exit(0); } } fwrite(STDERR, "nativephp/desktop not found\n"); exit(1);'
-
-      - name: Record resolution evidence
-        run: |
+          changed="$(git diff --name-only | sort)"
+          printf 'Changed files before commit:\n%s\n' "$changed"
+          expected=$'composer.json\ncomposer.lock'
+          test "$changed" = "$expected"
+          git diff -- composer.json composer.lock > pr01-clean.diff
           composer show nativephp/desktop --locked --format=json > nativephp-lock.json
-          git diff -- composer.json composer.lock > nativephp-lock.diff
 
-      - name: Upload resolved lock
+      - name: Commit clean PR01 branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.json composer.lock
+          git commit -m "security: update NativePHP loopback hotfix"
+          git rev-parse HEAD > pr01-branch-sha.txt
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Upload resolution evidence
         uses: actions/upload-artifact@v4
         with:
-          name: pr01-nativephp-lock
+          name: pr01-nativephp-clean-branch
           path: |
             composer.json
             composer.lock
             nativephp-lock.json
-            nativephp-lock.diff
+            pr01-clean.diff
+            pr01-branch-sha.txt
           if-no-files-found: error
