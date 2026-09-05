@@ -1,8 +1,9 @@
 name: PR03 torrent state-ordering builder
 
 on:
-  pull_request:
-    branches: [master]
+  push:
+    branches:
+      - audit/pr-03-builder
 
 permissions:
   contents: write
@@ -17,296 +18,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
-
       - name: Reset to exact prerequisite and install dependencies
         run: |
           git checkout --detach "$BASE_SHA"
           composer install --no-interaction --prefer-dist
-
       - name: Apply DTV-006 patch and regressions
-        run: |
-          python <<'PY'
-          from pathlib import Path
-
-          controller = Path('app/Http/Controllers/TorrentController.php')
-          s = controller.read_text()
-
-          old_link = '''            // Link to episode if provided
-            if ($episodeId) {
-                /** @var \\App\\Models\\Episode|null $episode */
-                $episode = \\App\\Models\\Episode::find($episodeId);
-                if ($episode) {
-                    // Update magnetHash if we found one (either passed or extracted)
-                    if ($infoHash) {
-                        $episode->update(['magnetHash' => $infoHash]);
-                    }
-                    $episode->markDownloaded();
-                    // Optional: You might want to dispatch an event here if needed
-                }
-            }
-'''
-          new_link = '''            // Resolve the episode now, but do not mutate local state until the external add succeeds.
-            $episode = null;
-            if ($episodeId) {
-                /** @var \\App\\Models\\Episode|null $episode */
-                $episode = \\App\\Models\\Episode::find($episodeId);
-            }
-'''
-          if old_link not in s:
-              raise SystemExit('episode pre-mutation block not found')
-          s = s.replace(old_link, new_link, 1)
-
-          old_result = '''            if ($success) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Torrent added successfully',
-                    'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
-                ]);
-            }
-
-            return response()->json(['error' => 'Failed to add torrent to client'], 422);
-'''
-          new_result = '''            if (! $success) {
-                return response()->json(['error' => 'Failed to add torrent to client'], 422);
-            }
-
-            if ($episode) {
-                try {
-                    \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($episode, $infoHash) {
-                        if ($infoHash) {
-                            $episode->update(['magnetHash' => $infoHash]);
-                        }
-                        $episode->markDownloaded();
-                    });
-                } catch (Exception) {
-                    return response()->json([
-                        'error' => 'Torrent added, but failed to update episode state',
-                        'torrent_added' => true,
-                    ], 500);
-                }
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Torrent added successfully',
-                'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
-            ]);
-'''
-          if old_result not in s:
-              raise SystemExit('success/result block not found')
-          s = s.replace(old_result, new_result, 1)
-          controller.write_text(s)
-
-          test = Path('tests/Feature/Controllers/TorrentAddTest.php')
-          t = test.read_text()
-          t = t.replace('use App\\Services\\TorrentClients\\TorrentClientInterface;\n', 'use App\\Models\\Episode;\nuse App\\Models\\Serie;\nuse App\\Services\\TorrentClients\\TorrentClientInterface;\n', 1)
-
-          marker = '\n}\n'
-          if not t.endswith(marker):
-              raise SystemExit('unexpected TorrentAddTest class ending')
-
-          extra = r'''
-
-    private function createEpisode(): Episode
-    {
-        $serie = Serie::create([
-            'name' => 'State Ordering Test',
-            'trakt_id' => 91001,
-        ]);
-
-        return Episode::create([
-            'serie_id' => $serie->id,
-            'seasonnumber' => 1,
-            'episodenumber' => 1,
-            'trakt_id' => 91002,
-        ]);
-    }
-
-    private function bindClient(TorrentClientInterface $client): void
-    {
-        $mockService = Mockery::mock(TorrentClientService::class);
-        $mockService->shouldReceive('getActiveClient')->andReturn($client);
-        $this->app->instance(TorrentClientService::class, $mockService);
-    }
-
-    public function test_magnet_success_updates_episode_only_after_client_accepts_torrent(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '0123456789abcdef0123456789abcdef01234567';
-        $magnet = 'magnet:?xt=urn:btih:'.$hash;
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andReturn(true);
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'magnet' => $magnet,
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertOk()->assertJson(['success' => true]);
-        $episode->refresh();
-
-        $this->assertTrue($episode->isDownloaded());
-        $this->assertSame(strtoupper($hash), $episode->magnetHash);
-    }
-
-    public function test_magnet_false_result_leaves_episode_unchanged(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '1111111111111111111111111111111111111111';
-        $magnet = 'magnet:?xt=urn:btih:'.$hash;
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andReturn(false);
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'magnet' => $magnet,
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertStatus(422);
-        $episode->refresh();
-
-        $this->assertFalse($episode->isDownloaded());
-        $this->assertNull($episode->magnetHash);
-    }
-
-    public function test_magnet_exception_leaves_episode_unchanged(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '2222222222222222222222222222222222222222';
-        $magnet = 'magnet:?xt=urn:btih:'.$hash;
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addMagnet')->with($magnet, null, 'DuckieTV')->andThrow(new \RuntimeException('client add failed'));
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'magnet' => $magnet,
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertStatus(500)->assertJson(['error' => 'client add failed']);
-        $episode->refresh();
-
-        $this->assertFalse($episode->isDownloaded());
-        $this->assertNull($episode->magnetHash);
-    }
-
-    public function test_url_success_updates_episode_only_after_client_accepts_torrent(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '3333333333333333333333333333333333333333';
-        $url = 'http://example.com/state-ordering.torrent';
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addTorrentByUrl')
-            ->with($url, $hash, 'State.Ordering', null, 'DuckieTV')
-            ->andReturn(true);
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'url' => $url,
-            'infoHash' => $hash,
-            'releaseName' => 'State.Ordering',
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertOk()->assertJson(['success' => true]);
-        $episode->refresh();
-
-        $this->assertTrue($episode->isDownloaded());
-        $this->assertSame($hash, $episode->magnetHash);
-    }
-
-    public function test_url_false_result_leaves_episode_unchanged(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '4444444444444444444444444444444444444444';
-        $url = 'http://example.com/state-ordering-false.torrent';
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addTorrentByUrl')
-            ->with($url, $hash, 'State.Ordering.False', null, 'DuckieTV')
-            ->andReturn(false);
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'url' => $url,
-            'infoHash' => $hash,
-            'releaseName' => 'State.Ordering.False',
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertStatus(422);
-        $episode->refresh();
-
-        $this->assertFalse($episode->isDownloaded());
-        $this->assertNull($episode->magnetHash);
-    }
-
-    public function test_url_exception_leaves_episode_unchanged(): void
-    {
-        $episode = $this->createEpisode();
-        $hash = '5555555555555555555555555555555555555555';
-        $url = 'http://example.com/state-ordering-exception.torrent';
-
-        $mockClient = Mockery::mock(TorrentClientInterface::class);
-        $mockClient->shouldReceive('connect')->andReturn(true);
-        $mockClient->shouldReceive('addTorrentByUrl')
-            ->with($url, $hash, 'State.Ordering.Exception', null, 'DuckieTV')
-            ->andThrow(new \RuntimeException('client url add failed'));
-        $this->bindClient($mockClient);
-
-        $response = $this->postJson(route('torrents.add'), [
-            'url' => $url,
-            'infoHash' => $hash,
-            'releaseName' => 'State.Ordering.Exception',
-            'episode_id' => $episode->id,
-        ]);
-
-        $response->assertStatus(500)->assertJson(['error' => 'client url add failed']);
-        $episode->refresh();
-
-        $this->assertFalse($episode->isDownloaded());
-        $this->assertNull($episode->magnetHash);
-    }
-'''
-          t = t[:-len(marker)] + extra + marker
-          test.write_text(t)
-          PY
-
+        run: python -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwID0gUGF0aCgiYXBwL0h0dHAvQ29udHJvbGxlcnMvVG9ycmVudENvbnRyb2xsZXIucGhwIikKcyA9IHAucmVhZF90ZXh0KCkKb2xkID0gIiIiICAgICAgICAgICAgLy8gTGluayB0byBlcGlzb2RlIGlmIHByb3ZpZGVkCiAgICAgICAgICAgIGlmICgkZXBpc29kZUlkKSB7CiAgICAgICAgICAgICAgICAvKiogQHZhciBcXEFwcFxcTW9kZWxzXFxFcGlzb2RlfG51bGwgJGVwaXNvZGUgKi8KICAgICAgICAgICAgICAgICRlcGlzb2RlID0gXFxBcHBcXE1vZGVsc1xcRXBpc29kZTo6ZmluZCgkZXBpc29kZUlkKTsKICAgICAgICAgICAgICAgIGlmICgkZXBpc29kZSkgewogICAgICAgICAgICAgICAgICAgIC8vIFVwZGF0ZSBtYWduZXRIYXNoIGlmIHdlIGZvdW5kIG9uZSAoZWl0aGVyIHBhc3NlZCBvciBleHRyYWN0ZWQpCiAgICAgICAgICAgICAgICAgICAgaWYgKCRpbmZvSGFzaCkgewogICAgICAgICAgICAgICAgICAgICAgICAkZXBpc29kZS0+dXBkYXRlKFsnbWFnbmV0SGFzaCcgPT4gJGluZm9IYXNoXSk7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICRlcGlzb2RlLT5tYXJrRG93bmxvYWRlZCgpOwogICAgICAgICAgICAgICAgICAgIC8vIE9wdGlvbmFsOiBZb3UgbWlnaHQgd2FudCB0byBkaXNwYXRjaCBhbiBldmVudCBoZXJlIGlmIG5lZWRlZAogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiIiIgpuZXcgPSAiIiIgICAgICAgICAgICAvLyBSZXNvbHZlIHRoZSBlcGlzb2RlIG5vdywgYnV0IGRvIG5vdCBtdXRhdGUgbG9jYWwgc3RhdGUgdW50aWwgdGhlIGV4dGVybmFsIGFkZCBzdWNjZWVkcy4KICAgICAgICAgICAgJGVwaXNvZGUgPSBudWxsOwogICAgICAgICAgICBpZiAoJGVwaXNvZGVJZCkgewogICAgICAgICAgICAgICAgLyoqIEB2YXIgXFxBcHBcXE1vZGVsc1xcRXBpc29kZXxudWxsICRlcGlzb2RlICovCiAgICAgICAgICAgICAgICAkZXBpc29kZSA9IFxcQXBwXFxNb2RlbHNcXEVwaXNvZGU6OmZpbmQoJGVwaXNvZGVJZCk7CiAgICAgICAgICAgIH0KIiIiCmFzc2VydCBvbGQgaW4gcywgImVwaXNvZGUgcHJlLW11dGF0aW9uIGJsb2NrIG5vdCBmb3VuZCIKcyA9IHMucmVwbGFjZShvbGQsIG5ldywgMSkKb2xkID0gIiIiICAgICAgICAgICAgaWYgKCRzdWNjZXNzKSB7CiAgICAgICAgICAgICAgICByZXR1cm4gcmVzcG9uc2UoKS0+anNvbihbCiAgICAgICAgICAgICAgICAgICAgJ3N1Y2Nlc3MnID0+IHRydWUsCiAgICAgICAgICAgICAgICAgICAgJ21lc3NhZ2UnID0+ICdUb3JyZW50IGFkZGVkIHN1Y2Nlc3NmdWxseScsCiAgICAgICAgICAgICAgICAgICAgJ2luZm9IYXNoJyA9PiAkaW5mb0hhc2gsIC8vIFJldHVybiB0aGUgaGFzaCBzbyBzcGVjaWZpYyBVSSBsb2dpYyBjYW4gdXNlIGl0IGlmIG5lZWRlZAogICAgICAgICAgICAgICAgXSk7CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIHJldHVybiByZXNwb25zZSgpLT5qc29uKFsnZXJyb3InID0+ICdGYWlsZWQgdG8gYWRkIHRvcnJlbnQgdG8gY2xpZW50J10sIDQyMik7CiIiIgpuZXcgPSAiIiIgICAgICAgICAgICBpZiAoISAkc3VjY2VzcykgewogICAgICAgICAgICAgICAgcmV0dXJuIHJlc3BvbnNlKCktPmpzb24oWydlcnJvcicgPT4gJ0ZhaWxlZCB0byBhZGQgdG9ycmVudCB0byBjbGllbnQnXSwgNDIyKTsKICAgICAgICAgICAgfQoKICAgICAgICAgICAgaWYgKCRlcGlzb2RlKSB7CiAgICAgICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgICAgIFxcSWxsdW1pbmF0ZVxcU3VwcG9ydFxcRmFjYWRlc1xcREI6OnRyYW5zYWN0aW9uKGZ1bmN0aW9uICgpIHVzZSAoJGVwaXNvZGUsICRpbmZvSGFzaCkgewogICAgICAgICAgICAgICAgICAgICAgICBpZiAoJGluZm9IYXNoKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAkZXBpc29kZS0+dXBkYXRlKFsnbWFnbmV0SGFzaCcgPT4gJGluZm9IYXNoXSk7CiAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgJGVwaXNvZGUtPm1hcmtEb3dubG9hZGVkKCk7CiAgICAgICAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgICAgICB9IGNhdGNoIChFeGNlcHRpb24pIHsKICAgICAgICAgICAgICAgICAgICByZXR1cm4gcmVzcG9uc2UoKS0+anNvbihbCiAgICAgICAgICAgICAgICAgICAgICAgICdlcnJvcicgPT4gJ1RvcnJlbnQgYWRkZWQsIGJ1dCBmYWlsZWQgdG8gdXBkYXRlIGVwaXNvZGUgc3RhdGUnLAogICAgICAgICAgICAgICAgICAgICAgICAndG9ycmVudF9hZGRlZCcgPT4gdHJ1ZSwKICAgICAgICAgICAgICAgICAgICBdLCA1MDApOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CgogICAgICAgICAgICByZXR1cm4gcmVzcG9uc2UoKS0+anNvbihbCiAgICAgICAgICAgICAgICAnc3VjY2VzcycgPT4gdHJ1ZSwKICAgICAgICAgICAgICAgICdtZXNzYWdlJyA9PiAnVG9ycmVudCBhZGRlZCBzdWNjZXNzZnVsbHknLAogICAgICAgICAgICAgICAgJ2luZm9IYXNoJyA9PiAkaW5mb0hhc2gsIC8vIFJldHVybiB0aGUgaGFzaCBzbyBzcGVjaWZpYyBVSSBsb2dpYyBjYW4gdXNlIGl0IGlmIG5lZWRlZAogICAgICAgICAgICBdKTsKIiIiCmFzc2VydCBvbGQgaW4gcywgInN1Y2Nlc3MvcmVzdWx0IGJsb2NrIG5vdCBmb3VuZCIKcC53cml0ZV90ZXh0KHMucmVwbGFjZShvbGQsIG5ldywgMSkpCgpwID0gUGF0aCgidGVzdHMvRmVhdHVyZS9Db250cm9sbGVycy9Ub3JyZW50QWRkVGVzdC5waHAiKQpzID0gcC5yZWFkX3RleHQoKQphbmNob3IgPSAidXNlIEFwcFxcU2VydmljZXNcXFRvcnJlbnRDbGllbnRzXFxUb3JyZW50Q2xpZW50SW50ZXJmYWNlO1xuIgppbXBvcnRzID0gInVzZSBBcHBcXE1vZGVsc1xcRXBpc29kZTtcbnVzZSBBcHBcXE1vZGVsc1xcU2VyaWU7XG51c2UgQXBwXFxTZXJ2aWNlc1xcVG9ycmVudENsaWVudHNcXFRvcnJlbnRDbGllbnRJbnRlcmZhY2U7XG51c2UgUEhQVW5pdFxcRnJhbWV3b3JrXFxBdHRyaWJ1dGVzXFxEYXRhUHJvdmlkZXI7XG4iCmFzc2VydCBhbmNob3IgaW4gcywgInRlc3QgaW1wb3J0IGFuY2hvciBub3QgZm91bmQiCnMgPSBzLnJlcGxhY2UoYW5jaG9yLCBpbXBvcnRzLCAxKQptYXJrZXIgPSAiXG59XG4iCmFzc2VydCBzLmVuZHN3aXRoKG1hcmtlciksICJ1bmV4cGVjdGVkIFRvcnJlbnRBZGRUZXN0IGNsYXNzIGVuZGluZyIKZXh0cmEgPSByIiIiCgogICAgcHVibGljIHN0YXRpYyBmdW5jdGlvbiBlcGlzb2RlU3RhdGVDYXNlcygpOiBhcnJheQogICAgewogICAgICAgIHJldHVybiBbCiAgICAgICAgICAgICdtYWduZXQgc3VjY2VzcycgPT4gWydtYWduZXQnLCAnc3VjY2VzcyddLAogICAgICAgICAgICAnbWFnbmV0IGZhbHNlJyA9PiBbJ21hZ25ldCcsICdmYWxzZSddLAogICAgICAgICAgICAnbWFnbmV0IGV4Y2VwdGlvbicgPT4gWydtYWduZXQnLCAnZXhjZXB0aW9uJ10sCiAgICAgICAgICAgICd1cmwgc3VjY2VzcycgPT4gWyd1cmwnLCAnc3VjY2VzcyddLAogICAgICAgICAgICAndXJsIGZhbHNlJyA9PiBbJ3VybCcsICdmYWxzZSddLAogICAgICAgICAgICAndXJsIGV4Y2VwdGlvbicgPT4gWyd1cmwnLCAnZXhjZXB0aW9uJ10sCiAgICAgICAgXTsKICAgIH0KCiAgICAjW0RhdGFQcm92aWRlcignZXBpc29kZVN0YXRlQ2FzZXMnKV0KICAgIHB1YmxpYyBmdW5jdGlvbiB0ZXN0X2VwaXNvZGVfc3RhdGVfY2hhbmdlc19vbmx5X2FmdGVyX3RvcnJlbnRfYWRkX3N1Y2NlZWRzKHN0cmluZyAka2luZCwgc3RyaW5nICRvdXRjb21lKTogdm9pZAogICAgewogICAgICAgICRzZXJpZSA9IFNlcmllOjpjcmVhdGUoWyduYW1lJyA9PiAnU3RhdGUgT3JkZXJpbmcgVGVzdCcsICd0cmFrdF9pZCcgPT4gOTEwMDFdKTsKICAgICAgICAkZXBpc29kZSA9IEVwaXNvZGU6OmNyZWF0ZShbCiAgICAgICAgICAgICdzZXJpZV9pZCcgPT4gJHNlcmllLT5pZCwKICAgICAgICAgICAgJ3NlYXNvbm51bWJlcicgPT4gMSwKICAgICAgICAgICAgJ2VwaXNvZGVudW1iZXInID0+IDEsCiAgICAgICAgICAgICd0cmFrdF9pZCcgPT4gOTEwMDIsCiAgICAgICAgXSk7CiAgICAgICAgJGhhc2ggPSAka2luZCA9PT0gJ21hZ25ldCcKICAgICAgICAgICAgPyAnMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2NycKICAgICAgICAgICAgOiAnMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMyc7CiAgICAgICAgJG1hZ25ldCA9ICdtYWduZXQ6P3h0PXVybjpidGloOicuJGhhc2g7CiAgICAgICAgJHVybCA9ICdodHRwOi8vZXhhbXBsZS5jb20vc3RhdGUtb3JkZXJpbmcudG9ycmVudCc7CgogICAgICAgICRjbGllbnQgPSBNb2NrZXJ5Ojptb2NrKFRvcnJlbnRDbGllbnRJbnRlcmZhY2U6OmNsYXNzKTsKICAgICAgICAkY2xpZW50LT5zaG91bGRSZWNlaXZlKCdjb25uZWN0JyktPmFuZFJldHVybih0cnVlKTsKICAgICAgICAkYWRkID0gJGtpbmQgPT09ICdtYWduZXQnCiAgICAgICAgICAgID8gJGNsaWVudC0+c2hvdWxkUmVjZWl2ZSgnYWRkTWFnbmV0JyktPndpdGgoJG1hZ25ldCwgbnVsbCwgJ0R1Y2tpZVRWJykKICAgICAgICAgICAgOiAkY2xpZW50LT5zaG91bGRSZWNlaXZlKCdhZGRUb3JyZW50QnlVcmwnKS0+d2l0aCgkdXJsLCAkaGFzaCwgJ1N0YXRlLk9yZGVyaW5nJywgbnVsbCwgJ0R1Y2tpZVRWJyk7CiAgICAgICAgaWYgKCRvdXRjb21lID09PSAnZXhjZXB0aW9uJykgewogICAgICAgICAgICAkYWRkLT5hbmRUaHJvdyhuZXcgXFJ1bnRpbWVFeGNlcHRpb24oJ2NsaWVudCBhZGQgZmFpbGVkJykpOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgICRhZGQtPmFuZFJldHVybigkb3V0Y29tZSA9PT0gJ3N1Y2Nlc3MnKTsKICAgICAgICB9CgogICAgICAgICRzZXJ2aWNlID0gTW9ja2VyeTo6bW9jayhUb3JyZW50Q2xpZW50U2VydmljZTo6Y2xhc3MpOwogICAgICAgICRzZXJ2aWNlLT5zaG91bGRSZWNlaXZlKCdnZXRBY3RpdmVDbGllbnQnKS0+YW5kUmV0dXJuKCRjbGllbnQpOwogICAgICAgICR0aGlzLT5hcHAtPmluc3RhbmNlKFRvcnJlbnRDbGllbnRTZXJ2aWNlOjpjbGFzcywgJHNlcnZpY2UpOwoKICAgICAgICAkcGF5bG9hZCA9ICRraW5kID09PSAnbWFnbmV0JwogICAgICAgICAgICA/IFsnbWFnbmV0JyA9PiAkbWFnbmV0LCAnZXBpc29kZV9pZCcgPT4gJGVwaXNvZGUtPmlkXQogICAgICAgICAgICA6IFsKICAgICAgICAgICAgICAgICd1cmwnID0+ICR1cmwsCiAgICAgICAgICAgICAgICAnaW5mb0hhc2gnID0+ICRoYXNoLAogICAgICAgICAgICAgICAgJ3JlbGVhc2VOYW1lJyA9PiAnU3RhdGUuT3JkZXJpbmcnLAogICAgICAgICAgICAgICAgJ2VwaXNvZGVfaWQnID0+ICRlcGlzb2RlLT5pZCwKICAgICAgICAgICAgXTsKICAgICAgICAkcmVzcG9uc2UgPSAkdGhpcy0+cG9zdEpzb24ocm91dGUoJ3RvcnJlbnRzLmFkZCcpLCAkcGF5bG9hZCk7CgogICAgICAgIGlmICgkb3V0Y29tZSA9PT0gJ3N1Y2Nlc3MnKSB7CiAgICAgICAgICAgICRyZXNwb25zZS0+YXNzZXJ0T2soKS0+YXNzZXJ0SnNvbihbJ3N1Y2Nlc3MnID0+IHRydWVdKTsKICAgICAgICB9IGVsc2VpZiAoJG91dGNvbWUgPT09ICdmYWxzZScpIHsKICAgICAgICAgICAgJHJlc3BvbnNlLT5hc3NlcnRTdGF0dXMoNDIyKTsKICAgICAgICB9IGVsc2UgewogICAgICAgICAgICAkcmVzcG9uc2UtPmFzc2VydFN0YXR1cyg1MDApLT5hc3NlcnRKc29uKFsnZXJyb3InID0+ICdjbGllbnQgYWRkIGZhaWxlZCddKTsKICAgICAgICB9CgogICAgICAgICRlcGlzb2RlLT5yZWZyZXNoKCk7CiAgICAgICAgaWYgKCRvdXRjb21lID09PSAnc3VjY2VzcycpIHsKICAgICAgICAgICAgJHRoaXMtPmFzc2VydFRydWUoJGVwaXNvZGUtPmlzRG93bmxvYWRlZCgpKTsKICAgICAgICAgICAgJHRoaXMtPmFzc2VydFNhbWUoJGtpbmQgPT09ICdtYWduZXQnID8gc3RydG91cHBlcigkaGFzaCkgOiAkaGFzaCwgJGVwaXNvZGUtPm1hZ25ldEhhc2gpOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgICR0aGlzLT5hc3NlcnRGYWxzZSgkZXBpc29kZS0+aXNEb3dubG9hZGVkKCkpOwogICAgICAgICAgICAkdGhpcy0+YXNzZXJ0TnVsbCgkZXBpc29kZS0+bWFnbmV0SGFzaCk7CiAgICAgICAgfQogICAgfQoiIiIKcC53cml0ZV90ZXh0KHNbOi1sZW4obWFya2VyKV0gKyBleHRyYSArIG1hcmtlcikK'))"
       - name: Format and verify exact surface
         run: |
           ./vendor/bin/pint app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php
           php -l app/Http/Controllers/TorrentController.php
           php -l tests/Feature/Controllers/TorrentAddTest.php
           git diff --check
-          printf '%s\n' app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php > /tmp/expected.txt
+          printf '%s\n' app/Http/Controllers/TorrentController.php tests/Feature/Controllers/TorrentAddTest.php | sort > /tmp/expected.txt
           git diff --name-only | sort > /tmp/actual.txt
-          sort /tmp/expected.txt -o /tmp/expected.txt
           diff -u /tmp/expected.txt /tmp/actual.txt
           ./vendor/bin/pint --test
-
       - name: Run focused regression
         run: php artisan test tests/Feature/Controllers/TorrentAddTest.php
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
-
       - name: Materialize clean candidate branch
         run: |
           git config user.name 'github-actions[bot]'
