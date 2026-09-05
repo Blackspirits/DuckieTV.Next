@@ -187,7 +187,7 @@ class TraktService
 
         $needsAuth = in_array($type, $this->authorizedEndpoints);
 
-        Log::info("TraktService GET: {$url}", ['headers' => $this->getHeaders($needsAuth)]);
+        Log::info("TraktService GET: {$url}", ['authenticated' => $needsAuth]);
 
         $response = Http::withHeaders($this->getHeaders($needsAuth))
             ->timeout(120)
@@ -652,7 +652,7 @@ class TraktService
             ]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('Trakt login failed: '.$response->body());
+            throw new \RuntimeException("Trakt login failed (HTTP {$response->status()})");
         }
 
         $data = $response->json();
@@ -691,7 +691,7 @@ class TraktService
             ]);
 
         if (! $response->successful()) {
-            Log::error('Trakt: Token renewal failed: '.$response->body());
+            Log::error('Trakt: Token renewal failed', ['status' => $response->status()]);
 
             return null;
         }

@@ -4,6 +4,7 @@ use App\Services\SettingsService;
 use App\Services\TraktService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 uses(RefreshDatabase::class);
 
@@ -188,6 +189,74 @@ it('handles login and stores tokens', function () {
     expect($token)->toBe('test_access_token')
         ->and($this->settings->get('trakttv.token'))->toBe('test_access_token')
         ->and($this->settings->get('trakttv.refresh_token'))->toBe('test_refresh_token');
+});
+
+it('does not log bearer token on authenticated get', function () {
+    $token = 'sensitive_access_token';
+    $this->settings->set('trakttv.token', $token);
+    Log::spy();
+
+    Http::fake([
+        'api.trakt.tv/sync/watched/shows*' => Http::response([]),
+    ]);
+
+    $this->trakt->watched();
+
+    Log::shouldHaveReceived('info')
+        ->once()
+        ->withArgs(function (string $message, array $context) use ($token) {
+            return str_starts_with($message, 'TraktService GET:')
+                && ($context['authenticated'] ?? null) === true
+                && ! array_key_exists('headers', $context)
+                && ! str_contains($message, $token)
+                && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $token);
+        });
+});
+
+it('does not expose oauth response body on login failure', function () {
+    $sensitive = 'oauth_response_secret';
+
+    Http::fake([
+        'api.trakt.tv/oauth/token*' => Http::response([
+            'error' => 'invalid_grant',
+            'access_token' => $sensitive,
+        ], 400),
+    ]);
+
+    try {
+        $this->trakt->login('invalid-pin');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())->toBe('Trakt login failed (HTTP 400)')
+            ->and($exception->getMessage())->not->toContain($sensitive);
+
+        return;
+    }
+
+    throw new RuntimeException('Expected Trakt login to fail');
+});
+
+it('does not log oauth response body on token renewal failure', function () {
+    $sensitive = 'oauth_refresh_response_secret';
+    $this->settings->set('trakttv.refresh_token', 'stored_refresh_token');
+    Log::spy();
+
+    Http::fake([
+        'api.trakt.tv/oauth/token*' => Http::response([
+            'error' => 'invalid_grant',
+            'refresh_token' => $sensitive,
+        ], 400),
+    ]);
+
+    expect($this->trakt->renewToken())->toBeNull();
+
+    Log::shouldHaveReceived('error')
+        ->once()
+        ->withArgs(function (string $message, array $context) use ($sensitive) {
+            return $message === 'Trakt: Token renewal failed'
+                && $context === ['status' => 400]
+                && ! str_contains($message, $sensitive)
+                && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
+        });
 });
 
 it('handles trending with cache', function () {
