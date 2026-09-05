@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BASE_SHA: 38103cc49befb2c891f44ae6442c1d5ceb57d46c
-      CANDIDATE_BRANCH: audit/pr-04-setup-determinism
+      STAGING_BRANCH: audit/pr-04-staging
 
     steps:
       - name: Checkout builder branch
@@ -101,15 +101,15 @@ jobs:
           diff -u /tmp/expected-files.txt /tmp/actual-files.txt
           git diff --check "$BASE_SHA"
 
-      - name: Materialize clean candidate branch
+      - name: Materialize non-workflow staging tree
         run: |
-          git checkout -B "$CANDIDATE_BRANCH"
+          git checkout -B "$STAGING_BRANCH"
           git config user.name "BlackSpirits Audit Bot"
           git config user.email "blackspirits@users.noreply.github.com"
-          git add .github/workflows/Tests.yml composer.json package.json package-lock.json
-          git commit -m "chore: make setup and npm installs reproducible"
-          git push --force origin HEAD:"$CANDIDATE_BRANCH"
-          echo "Candidate HEAD: $(git rev-parse HEAD)"
+          git add composer.json package.json package-lock.json
+          git commit -m "chore: stage reproducible setup candidate"
+          git push --force origin HEAD:"$STAGING_BRANCH"
+          echo "Staging HEAD: $(git rev-parse HEAD)"
 
       - name: Preserve npm evidence
         if: always()
