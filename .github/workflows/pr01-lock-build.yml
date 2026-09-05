@@ -1,0 +1,45 @@
+name: PR01 NativePHP lock builder
+
+on:
+  push:
+    branches:
+      - audit/build-pr01-nativephp-lock
+
+jobs:
+  resolve-lock:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Resolve NativePHP lock without scripts
+        run: composer update nativephp/desktop --with-dependencies --no-scripts --no-interaction --prefer-dist
+
+      - name: Validate Composer files
+        run: composer validate --strict
+
+      - name: Verify NativePHP version
+        run: |
+          php -r '$lock=json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); foreach ($lock["packages"] as $package) { if ($package["name"] === "nativephp/desktop") { if ($package["version"] !== "2.2.1") { fwrite(STDERR, "Expected nativephp/desktop 2.2.1, got {$package["version"]}\n"); exit(1); } echo "nativephp/desktop={$package["version"]}\n"; exit(0); } } fwrite(STDERR, "nativephp/desktop not found\n"); exit(1);'
+
+      - name: Record resolution evidence
+        run: |
+          composer show nativephp/desktop --locked --format=json > nativephp-lock.json
+          git diff -- composer.json composer.lock > nativephp-lock.diff
+
+      - name: Upload resolved lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr01-nativephp-lock
+          path: |
+            composer.json
+            composer.lock
+            nativephp-lock.json
+            nativephp-lock.diff
+          if-no-files-found: error
