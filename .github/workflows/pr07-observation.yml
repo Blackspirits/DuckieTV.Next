@@ -1,0 +1,84 @@
+name: PR07 Baseline Observation
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    if: github.head_ref == 'audit/pr-07-observation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify product prerequisite
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          test "$(git rev-parse HEAD^)" = "$PR06"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/pr07-observation.yml"
+
+      - name: Observe overlapping baseline polling
+        run: |
+          cat > /tmp/observe-polling.mjs <<'EOF'
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+
+          let intervalCallback = null;
+          let fetchCount = 0;
+          const never = new Promise(() => {});
+
+          globalThis.document = {
+            querySelector(selector) {
+              if (selector === 'meta[name="csrf-token"]') {
+                return { getAttribute: () => 'test-token' };
+              }
+              return null;
+            },
+            dispatchEvent() {},
+          };
+          globalThis.CustomEvent = class CustomEvent {
+            constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+          };
+          globalThis.fetch = async () => {
+            fetchCount += 1;
+            return never;
+          };
+          globalThis.setInterval = (callback) => {
+            intervalCallback = callback;
+            return 1;
+          };
+          globalThis.clearInterval = () => {};
+
+          const source = fs.readFileSync('public/js/PollingService.js', 'utf8');
+          vm.runInThisContext(`${source}\nglobalThis.__PollingService = PollingService;`);
+
+          const service = new globalThis.__PollingService(2000, {});
+          service.start();
+          if (fetchCount !== 1 || typeof intervalCallback !== 'function') {
+            throw new Error(`unexpected baseline start: fetchCount=${fetchCount}`);
+          }
+
+          intervalCallback();
+          if (fetchCount !== 2) {
+            throw new Error(`expected overlapping second fetch while first is unresolved; got ${fetchCount}`);
+          }
+
+          console.log('DTV-019 baseline: overlapping poll reproduced (2 concurrent unresolved fetches).');
+          EOF
+          node /tmp/observe-polling.mjs
+
+      - name: Inventory torrent-client HTTP call sites
+        run: |
+          echo '--- Http:: call sites ---'
+          grep -R -n 'Http::' app/Services/TorrentClients || true
+          echo '--- counts ---'
+          printf 'occurrences=' && grep -R -o 'Http::' app/Services/TorrentClients | wc -l
+          printf 'files=' && grep -R -l 'Http::' app/Services/TorrentClients | wc -l
+          echo '--- qBittorrent login/status evidence ---'
+          grep -n -E "auth/login|torrents/info|function connect" app/Services/TorrentClients/QBittorrentClient.php
