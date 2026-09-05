@@ -1,0 +1,196 @@
+name: PR07 Candidate Builder v2
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-07-builder-run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify builder input
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          actual="$(git diff --name-only "$PR06" HEAD | sort)"
+          expected="$(printf '%s\n' '.github/scripts/pr07-build.py' '.github/workflows/pr07-builder-run.yml' '.github/workflows/pr07-builder-v2.yml' | sort)"
+          test "$actual" = "$expected"
+          cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+          git reset --hard "$PR06"
+          git clean -fdx
+
+      - name: Generate corrected candidate
+        run: |
+          python /tmp/pr07-build.py
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('tests/Frontend/PollingReliability.mjs')
+          s = p.read_text()
+          old = """await Promise.resolve();\nawait Promise.resolve();\nawait Promise.resolve();\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
+          new = """for (let i = 0; i < 20 && visibilityService.inFlight; i += 1) {\n    await Promise.resolve();\n}\nif (visibilityService.inFlight) throw new Error('visible resumed poll did not settle');\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
+          if s.count(old) != 1: raise SystemExit('frontend await marker mismatch')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tests/Unit/Services/QBittorrentSessionReuseTest.php')
+          s = p.read_text(); marker = "use Illuminate\\Support\\Facades\\Http;\n"
+          if s.count(marker) != 1: raise SystemExit('test import marker mismatch')
+          p.write_text(s.replace(marker, marker + "\nuses(Tests\\TestCase::class);\n", 1))
+
+          p = Path('app/Services/TorrentClients/BaseTorrentClient.php')
+          s = p.read_text()
+          old = """    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    protected function getConfigMappings(): array\n"""
+          new = """    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function getConfigMappings(): array\n"""
+          if s.count(old) != 1: raise SystemExit('base PHPDoc marker mismatch')
+          s = s.replace(old, new, 1)
+          s = s.replace('protected const CONNECT_TIMEOUT_SECONDS = 3;', 'protected const int CONNECT_TIMEOUT_SECONDS = 3;', 1)
+          s = s.replace('protected const REQUEST_TIMEOUT_SECONDS = 8;', 'protected const int REQUEST_TIMEOUT_SECONDS = 8;', 1)
+          p.write_text(s)
+
+          p = Path('app/Services/TorrentClients/QBittorrentClient.php')
+          s = p.read_text()
+          s = s.replace('private const SESSION_CACHE_TTL_SECONDS = 300;', 'private const int SESSION_CACHE_TTL_SECONDS = 300;', 1)
+          marker = "    public function readConfig(): void\n"
+          if s.count(marker) != 1: raise SystemExit('readConfig marker mismatch')
+          s = s.replace(marker, "    #[\\Override]\n" + marker, 1)
+          old = """        if ($this->cookie !== null) {\n            $response = $this->http()\n                ->withHeaders(['Cookie' => $this->cookie])\n                ->get($this->getUrl('torrents/info'));\n"""
+          new = """        if ($this->cookie !== null) {\n            /** @var \\Illuminate\\Http\\Client\\Response $response */\n            $response = $this->http()\n                ->withHeaders(['Cookie' => $this->cookie])\n                ->get($this->getUrl('torrents/info'));\n"""
+          if s.count(old) != 1: raise SystemExit('cached request marker mismatch')
+          s = s.replace(old, new, 1)
+          old = """            $this->cookie = $response->header('Set-Cookie');\n            $this->connected = true;\n\n            if ($this->cookie !== null) {\n                $this->cacheCookie($this->cookie);\n            }\n\n            return true;\n"""
+          new = """            $this->cookie = $response->header('Set-Cookie');\n            if ($this->cookie === '') {\n                $this->connected = false;\n\n                throw new Exception('qBittorrent login succeeded without a session cookie');\n            }\n\n            $this->connected = true;\n            $this->cacheCookie($this->cookie);\n\n            return true;\n"""
+          if s.count(old) != 1: raise SystemExit('login cookie marker mismatch')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git diff --check
+
+      - name: Verify product surface
+        run: |
+          actual="$(git status --porcelain | sed 's/^...//' | sort)"
+          expected="$(cat <<'EOF' | sort
+          app/Services/TorrentClients/Aria2Client.php
+          app/Services/TorrentClients/BaseTorrentClient.php
+          app/Services/TorrentClients/DelugeClient.php
+          app/Services/TorrentClients/KTorrentClient.php
+          app/Services/TorrentClients/QBittorrentClient.php
+          app/Services/TorrentClients/RTorrentClient.php
+          app/Services/TorrentClients/TixatiClient.php
+          app/Services/TorrentClients/TransmissionClient.php
+          app/Services/TorrentClients/TTorrentClient.php
+          app/Services/TorrentClients/UTorrentClient.php
+          app/Services/TorrentClients/UTorrentWebUIClient.php
+          public/js/PollingService.js
+          tests/Frontend/PollingReliability.mjs
+          tests/Unit/PollingReliabilityTest.php
+          tests/Unit/Services/QBittorrentSessionReuseTest.php
+          tests/Unit/Services/TorrentClientHttpPolicyTest.php
+          EOF
+          )"
+          test "$actual" = "$expected"
+          test "$(grep -R -o 'Http::' app/Services/TorrentClients | wc -l)" -eq 1
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm ci
+          npm audit --audit-level=low
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Validate runtime and regressions
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          node tests/Frontend/PollingReliability.mjs
+          php artisan test tests/Unit/PollingReliabilityTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php
+          ./vendor/bin/pint app/Services/TorrentClients/QBittorrentClient.php
+          ./vendor/bin/pint --test
+          php artisan test
+
+      - name: Compare Psalm to exact PR06 without cache
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          git diff --binary > /tmp/candidate.patch
+          git reset --hard "$PR06"
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/baseline.json
+          baseline_status=$?
+          set -e
+          test "$baseline_status" -eq 2
+          git apply /tmp/candidate.patch
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/candidate.json
+          candidate_status=$?
+          set -e
+          test "$candidate_status" -eq 2
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          def load(path):
+              data = json.loads(Path(path).read_text())
+              if not isinstance(data, list): raise SystemExit(f'unexpected Psalm JSON: {path}')
+              return data
+
+          def norm(item):
+              return (
+                  item.get('file_name') or '',
+                  item.get('type') or '',
+                  item.get('message') or '',
+                  item.get('severity') or 'error',
+              )
+
+          baseline = load('/tmp/baseline.json')
+          candidate = load('/tmp/candidate.json')
+          bc = Counter(i.get('severity') or 'error' for i in baseline)
+          cc = Counter(i.get('severity') or 'error' for i in candidate)
+          print('Psalm PR06:', dict(bc))
+          print('Psalm PR07:', dict(cc))
+          if bc['error'] != 597 or bc['info'] != 776:
+              raise SystemExit(f'PR06 baseline drift: {bc}')
+          if cc['error'] > bc['error'] or cc['info'] > bc['info']:
+              raise SystemExit(f'Psalm aggregate regression: {cc} > {bc}')
+
+          added = Counter(map(norm, candidate)) - Counter(map(norm, baseline))
+          print('New Psalm diagnostics:', sum(added.values()))
+          for diag, count in sorted(added.items()):
+              print('ADDED', count, *diag, sep=' | ')
+          if added:
+              raise SystemExit('PR07 introduces new Psalm diagnostics')
+          PY
+
+      - name: Materialize replacement candidate
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          rm -f .env.testing
+          git config user.name BlackSpirits
+          git config user.email blackspirits@gmail.com
+          git add app/Services/TorrentClients public/js/PollingService.js tests/Frontend/PollingReliability.mjs tests/Unit/PollingReliabilityTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php
+          git commit -m 'perf: bound torrent polling and client HTTP requests'
+          test "$(git rev-parse HEAD^)" = "$PR06"
+          test "$(git diff --name-only "$PR06" HEAD | wc -l)" -eq 16
+          test -z "$(git status --porcelain)"
+          git push --force-with-lease=refs/heads/audit/pr-07-polling-reliability:0af33f4154fd4ed85d0051b3eabc77db7d6888cf origin HEAD:refs/heads/audit/pr-07-polling-reliability
