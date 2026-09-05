@@ -126,7 +126,7 @@ extra = r'''
             : $client->shouldReceive('addTorrentByUrl')->with($url, $hash, 'State.Ordering', null, 'DuckieTV');
 
         if ($outcome === 'exception') {
-            $add->andThrow(new \\RuntimeException('client add failed'));
+            $add->andThrow(new \RuntimeException('client add failed'));
         } else {
             $add->andReturn($outcome === 'success');
         }
