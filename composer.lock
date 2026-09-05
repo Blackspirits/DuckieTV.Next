@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0735b9e879088bcffbc987196ec77f93",
+    "content-hash": "a9e2936410df2e6883ed52d22aec6988",
     "packages": [
         {
             "name": "brick/math",
@@ -2380,27 +2380,26 @@
         },
         {
             "name": "nativephp/desktop",
-            "version": "2.1.0",
+            "version": "2.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/NativePHP/desktop.git",
-                "reference": "1dafd3c8e06941519dedf7fe38adbfaa352394a2"
+                "reference": "552cdd71a21eda6f8dba4a3189249fbf69a14bb0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/NativePHP/desktop/zipball/1dafd3c8e06941519dedf7fe38adbfaa352394a2",
-                "reference": "1dafd3c8e06941519dedf7fe38adbfaa352394a2",
+                "url": "https://api.github.com/repos/NativePHP/desktop/zipball/552cdd71a21eda6f8dba4a3189249fbf69a14bb0",
+                "reference": "552cdd71a21eda6f8dba4a3189249fbf69a14bb0",
                 "shasum": ""
             },
             "require": {
                 "ext-zip": "*",
-                "illuminate/contracts": "^10.0|^11.0|^12.0",
+                "illuminate/contracts": "^10.0|^11.0|^12.0|^13.0",
                 "laravel/prompts": "^0.1.1|^0.2|^0.3",
                 "nativephp/php-bin": "^1.0",
                 "php": "^8.3",
                 "spatie/laravel-package-tools": "^1.16.4",
-                "symfony/filesystem": "^6.4|^7.2",
-                "symfony/finder": "^6.2|^7.0"
+                "symfony/filesystem": "^6.4|^7.2|^8.0"
             },
             "conflict": {
                 "nativephp/electron": "*",
@@ -2412,10 +2411,10 @@
                 "larastan/larastan": "^2.0|^3.1",
                 "laravel/pint": "^1.0",
                 "nunomaduro/collision": "^7.11|^8.1.1",
-                "orchestra/testbench": "^8.0|^9.0|^10.0",
-                "pestphp/pest": "^v2.30|^3.0",
-                "pestphp/pest-plugin-arch": "^2.0|^3.0",
-                "pestphp/pest-plugin-laravel": "^2.0|^3.1",
+                "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
+                "pestphp/pest": "^v2.30|^3.0|^4.4",
+                "pestphp/pest-plugin-arch": "^2.0|^3.0|^4.0",
+                "pestphp/pest-plugin-laravel": "^2.0|^3.1|^4.1",
                 "phpstan/extension-installer": "^1.1",
                 "phpstan/phpstan-deprecation-rules": "^1.0|^2.0",
                 "phpstan/phpstan-phpunit": "^1.0|^2.0",
@@ -2479,7 +2478,7 @@
             ],
             "support": {
                 "issues": "https://github.com/NativePHP/desktop/issues",
-                "source": "https://github.com/NativePHP/desktop/tree/2.1.0"
+                "source": "https://github.com/NativePHP/desktop/tree/2.2.1"
             },
             "funding": [
                 {
@@ -2491,7 +2490,7 @@
                     "type": "opencollective"
                 }
             ],
-            "time": "2026-01-07T14:13:04+00:00"
+            "time": "2026-05-29T04:56:41+00:00"
         },
         {
             "name": "nativephp/php-bin",
