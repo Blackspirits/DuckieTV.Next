@@ -35,6 +35,7 @@ jobs:
           python /tmp/pr07-build.py
           python - <<'PY'
           from pathlib import Path
+
           path = Path('tests/Frontend/PollingReliability.mjs')
           text = path.read_text()
           old = """await Promise.resolve();\nawait Promise.resolve();\nawait Promise.resolve();\nif (scheduledDelayExcluding(10000) !== 4000) throw new Error('first disconnected response did not back off to 4000 ms');"""
@@ -42,6 +43,14 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit('PollingReliability.mjs: expected visibility await block once')
           path.write_text(text.replace(old, new))
+
+          path = Path('tests/Unit/Services/QBittorrentSessionReuseTest.php')
+          text = path.read_text()
+          marker = "use Illuminate\\Support\\Facades\\Http;\n"
+          replacement = marker + "\nuses(Tests\\TestCase::class);\n"
+          if text.count(marker) != 1:
+              raise SystemExit('QBittorrentSessionReuseTest.php: expected Http import once')
+          path.write_text(text.replace(marker, replacement, 1))
           PY
 
       - name: Verify exact candidate surface
