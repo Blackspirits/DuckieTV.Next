@@ -58,20 +58,21 @@ assert(!lock.packages['node_modules/vite'], 'stale Vite closure must be gone');
 assert(!lock.packages['node_modules/@tailwindcss/vite'], 'stale @tailwindcss/vite closure must be gone');
 assert(!lock.packages['node_modules/laravel-vite-plugin'], 'stale laravel-vite-plugin closure must be gone');
 
-const versions = Object.fromEntries([
-    'concurrently',
-    'shell-quote',
-    'socket.io-client',
-    'engine.io-client',
-    'ws',
-].map((name) => [name, lock.packages[`node_modules/${name}`]?.version]));
+const concurrentlyVersion = lock.packages['node_modules/concurrently']?.version;
+const shellQuoteVersion = lock.packages['node_modules/shell-quote']?.version;
+assert(concurrentlyVersion, 'concurrently must exist in the resolved lock');
+assert(shellQuoteVersion, 'shell-quote must exist in the resolved lock');
+assert(atLeast(concurrentlyVersion, '9.2.4'), `concurrently ${concurrentlyVersion} is too old`);
+assert(atLeast(shellQuoteVersion, '1.9.0'), `shell-quote ${shellQuoteVersion} remains vulnerable`);
 
-for (const [name, version] of Object.entries(versions)) {
-    assert(version, `${name} must exist in the resolved lock`);
+for (const stalePeer of ['socket.io-client', 'engine.io-client', 'ws']) {
+    assert(!lock.packages[`node_modules/${stalePeer}`], `${stalePeer} should not remain in the reconciled unused peer closure`);
 }
-assert(atLeast(versions.concurrently, '9.2.4'), `concurrently ${versions.concurrently} is too old`);
-assert(atLeast(versions['shell-quote'], '1.9.0'), `shell-quote ${versions['shell-quote']} remains vulnerable`);
-assert(atLeast(versions['engine.io-client'], '6.6.6'), `engine.io-client ${versions['engine.io-client']} is too old`);
-assert(atLeast(versions.ws, '8.21.0'), `ws ${versions.ws} remains vulnerable`);
 
-console.log(JSON.stringify({ versions }, null, 2));
+console.log(JSON.stringify({
+    versions: {
+        concurrently: concurrentlyVersion,
+        'shell-quote': shellQuoteVersion,
+    },
+    removedUnusedPeerClosure: ['socket.io-client', 'engine.io-client', 'ws'],
+}, null, 2));
