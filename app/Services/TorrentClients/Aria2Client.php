@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\Aria2Data;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Aria2 Client Implementation.
@@ -70,7 +69,7 @@ class Aria2Client extends BaseTorrentClient
                 ['methodName' => 'aria2.tellStopped', 'params' => ['token:'.$this->config['token'], 0, 9999]],
             ];
 
-            $response = Http::post($this->getRpcUrl(), [
+            $response = $this->http()->post($this->getRpcUrl(), [
                 'jsonrpc' => '2.0',
                 'method' => 'system.multicall',
                 'id' => 'DuckieTV',
@@ -164,7 +163,7 @@ class Aria2Client extends BaseTorrentClient
         array_unshift($params, 'token:'.($this->config['token'] ?? ''));
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::post($this->getRpcUrl(), [
+        $response = $this->http()->post($this->getRpcUrl(), [
             'jsonrpc' => '2.0',
             'method' => 'aria2.'.$method,
             'id' => 'DuckieTV',

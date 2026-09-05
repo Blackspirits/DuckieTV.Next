@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\UTorrentData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * uTorrent / BitTorrent client implementation.
@@ -297,7 +296,7 @@ class UTorrentClient extends BaseTorrentClient
         $baseUrl = rtrim($this->config['server'], '/').':'.$this->config['port'].'/btapp/';
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::get($baseUrl, array_merge(['type' => $type], $params));
+        $response = $this->http()->get($baseUrl, array_merge(['type' => $type], $params));
 
         if (! $response->successful()) {
             throw new Exception('uTorrent API error: '.$response->status());

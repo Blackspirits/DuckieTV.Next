@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\TTorrentData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -55,7 +54,7 @@ class TTorrentClient extends BaseTorrentClient
     public function connect(): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -86,7 +85,7 @@ class TTorrentClient extends BaseTorrentClient
     public function getTorrents(): array
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -133,7 +132,7 @@ class TTorrentClient extends BaseTorrentClient
     public function startTorrent(string $infoHash): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -160,7 +159,7 @@ class TTorrentClient extends BaseTorrentClient
     public function pauseTorrent(string $infoHash): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -179,7 +178,7 @@ class TTorrentClient extends BaseTorrentClient
     public function removeTorrent(string $infoHash): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -222,7 +221,7 @@ class TTorrentClient extends BaseTorrentClient
     public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -252,7 +251,7 @@ class TTorrentClient extends BaseTorrentClient
     public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool
     {
         try {
-            $request = Http::asMultipart();
+            $request = $this->http()->asMultipart();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }

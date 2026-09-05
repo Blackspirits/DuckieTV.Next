@@ -1,52 +1,161 @@
-
 /**
- * PollingService.js
- * 
- * Handles periodic polling of the torrent client status.
- * Replaces the WebSocket/Reverb implementation.
+ * Lightweight polling service for torrent client status.
+ *
+ * Keeps at most one request in flight, applies bounded exponential backoff
+ * while disconnected/failing, and pauses new polling while the document is hidden.
  */
 class PollingService {
-    constructor(interval = 2000, translations = {}) {
+    constructor(interval = 2000, translations = {}, requestTimeout = 10000, maxBackoff = 30000) {
         this.interval = interval;
         this.translations = translations;
+        this.requestTimeout = requestTimeout;
+        this.maxBackoff = maxBackoff;
         this.timer = null;
+        this.running = false;
+        this.inFlight = false;
+        this.abortController = null;
+        this.failureCount = 0;
         this.csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        this.visibilityHandler = () => this.handleVisibilityChange();
     }
 
     start() {
-        if (this.timer) return;
-        this.poll();
-        this.timer = setInterval(() => this.poll(), this.interval);
+        if (this.running) {
+            return;
+        }
+
+        this.running = true;
+        document.addEventListener?.('visibilitychange', this.visibilityHandler);
+
+        if (!document.hidden) {
+            void this.poll();
+        }
+
         console.log('PollingService started.');
     }
 
     stop() {
-        if (this.timer) {
-            clearInterval(this.timer);
+        this.running = false;
+
+        if (this.timer !== null) {
+            clearTimeout(this.timer);
             this.timer = null;
         }
+
+        if (this.abortController !== null) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+
+        document.removeEventListener?.('visibilitychange', this.visibilityHandler);
         console.log('PollingService stopped.');
     }
 
+    schedule(delay) {
+        if (!this.running || document.hidden || this.timer !== null) {
+            return;
+        }
+
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            void this.poll();
+        }, delay);
+    }
+
+    handleVisibilityChange() {
+        if (document.hidden) {
+            if (this.timer !== null) {
+                clearTimeout(this.timer);
+                this.timer = null;
+            }
+            return;
+        }
+
+        if (this.running && !this.inFlight) {
+            this.failureCount = 0;
+            void this.poll();
+        }
+    }
+
+    backoffDelay() {
+        const exponent = Math.min(this.failureCount, 4);
+        return Math.min(this.maxBackoff, this.interval * (2 ** exponent));
+    }
+
+    emitMetric(startedAt, outcome, nextDelay) {
+        const now = globalThis.performance?.now?.() ?? Date.now();
+        document.dispatchEvent(new CustomEvent('torrent-poll-metric', {
+            detail: {
+                durationMs: Math.max(0, Math.round(now - startedAt)),
+                outcome,
+                nextDelayMs: nextDelay,
+            },
+        }));
+    }
+
     async poll() {
+        if (!this.running || this.inFlight || document.hidden) {
+            return false;
+        }
+
+        this.inFlight = true;
+        const startedAt = globalThis.performance?.now?.() ?? Date.now();
+        const controller = new AbortController();
+        this.abortController = controller;
+        const timeout = setTimeout(() => controller.abort(), this.requestTimeout);
+        let outcome = 'error';
+        let nextDelay = this.interval;
+
         try {
             const response = await fetch('/torrents/status', {
                 headers: {
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                },
+                signal: controller.signal,
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
             this.handleStatusUpdate(data);
 
+            if (data.connected) {
+                this.failureCount = 0;
+                outcome = 'connected';
+            } else {
+                this.failureCount += 1;
+                nextDelay = this.backoffDelay();
+                outcome = 'disconnected';
+            }
+
+            return true;
         } catch (error) {
-            console.warn('PollingService error:', error);
-            this.handleError(error);
+            const stoppedAbort = error?.name === 'AbortError' && !this.running;
+            if (!stoppedAbort) {
+                console.warn('Polling failed:', error);
+                this.handleError(error);
+                this.failureCount += 1;
+                nextDelay = this.backoffDelay();
+                outcome = error?.name === 'AbortError' ? 'timeout' : 'error';
+            } else {
+                outcome = 'stopped';
+            }
+
+            return false;
+        } finally {
+            clearTimeout(timeout);
+            if (this.abortController === controller) {
+                this.abortController = null;
+            }
+            this.inFlight = false;
+            this.emitMetric(startedAt, outcome, nextDelay);
+
+            if (this.running && !document.hidden) {
+                this.schedule(nextDelay);
+            }
         }
     }
 

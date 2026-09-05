@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\RTorrentData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * rTorrent Client Implementation.
@@ -264,7 +263,7 @@ class RTorrentClient extends BaseTorrentClient
         $url = rtrim($this->config['server'], '/').':'.$this->config['port'].'/'.ltrim($this->config['path'], '/');
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::withBody($xml, 'text/xml')->post($url);
+        $response = $this->http()->withBody($xml, 'text/xml')->post($url);
 
         if (! $response->successful()) {
             throw new Exception('rTorrent XML-RPC error: '.$response->status());

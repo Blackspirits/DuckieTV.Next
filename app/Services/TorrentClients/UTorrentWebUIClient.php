@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\UTorrentWebUIData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -64,7 +63,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/gui/token.html';
 
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -261,7 +260,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/gui/?token='.$this->token.'&action=add-file';
 
-            $request = Http::asMultipart();
+            $request = $this->http()->asMultipart();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -288,7 +287,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
     {
         $url = $this->getBaseUrl().'/gui/?token='.$this->token.'&'.$query;
 
-        $request = Http::asForm();
+        $request = $this->http()->asForm();
         if ($this->config['use_auth']) {
             $request->withBasicAuth($this->config['username'], $this->config['password']);
         }
