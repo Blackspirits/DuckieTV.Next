@@ -1,0 +1,124 @@
+name: PR07 Candidate Builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-07-builder-run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify builder prerequisite
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          actual="$(git diff --name-only "$PR06" HEAD | sort)"
+          expected="$(printf '%s\n' '.github/scripts/pr07-build.py' '.github/workflows/pr07-builder-run.yml' | sort)"
+          test "$actual" = "$expected"
+          cp .github/scripts/pr07-build.py /tmp/pr07-build.py
+
+      - name: Reset to exact PR06 and generate candidate
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          git reset --hard "$PR06"
+          git clean -fdx
+          python /tmp/pr07-build.py
+
+      - name: Verify exact candidate surface
+        run: |
+          actual="$(git status --porcelain | sed 's/^...//' | sort)"
+          expected="$(cat <<'EOF' | sort
+          app/Services/TorrentClients/Aria2Client.php
+          app/Services/TorrentClients/BaseTorrentClient.php
+          app/Services/TorrentClients/DelugeClient.php
+          app/Services/TorrentClients/KTorrentClient.php
+          app/Services/TorrentClients/QBittorrentClient.php
+          app/Services/TorrentClients/RTorrentClient.php
+          app/Services/TorrentClients/TixatiClient.php
+          app/Services/TorrentClients/TransmissionClient.php
+          app/Services/TorrentClients/TTorrentClient.php
+          app/Services/TorrentClients/UTorrentClient.php
+          app/Services/TorrentClients/UTorrentWebUIClient.php
+          public/js/PollingService.js
+          tests/Frontend/PollingReliability.mjs
+          tests/Unit/PollingReliabilityTest.php
+          tests/Unit/Services/QBittorrentSessionReuseTest.php
+          tests/Unit/Services/TorrentClientHttpPolicyTest.php
+          EOF
+          )"
+          printf '%s\n' "$actual"
+          test "$actual" = "$expected"
+          test "$(grep -R -l 'Http::' app/Services/TorrentClients | wc -l)" -eq 1
+          test "$(grep -R -o 'Http::' app/Services/TorrentClients | wc -l)" -eq 1
+          grep -q 'Http::connectTimeout' app/Services/TorrentClients/BaseTorrentClient.php
+          git diff --check
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm ci
+          npm audit --audit-level=low
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: PHP syntax
+        run: |
+          php -l app/Services/TorrentClients/BaseTorrentClient.php
+          for file in app/Services/TorrentClients/*Client.php; do php -l "$file"; done
+          php -l tests/Unit/PollingReliabilityTest.php
+          php -l tests/Unit/Services/QBittorrentSessionReuseTest.php
+          php -l tests/Unit/Services/TorrentClientHttpPolicyTest.php
+
+      - name: Frontend regression
+        run: node tests/Frontend/PollingReliability.mjs
+
+      - name: Focused PHP regressions
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+        run: php artisan test tests/Unit/PollingReliabilityTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Full suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+        run: php artisan test
+
+      - name: Materialize candidate branch
+        env:
+          PR06: eb53b7a43c9496854e0db3c0f7f5fa31a633e2ac
+        run: |
+          git status --porcelain
+          git config user.name BlackSpirits
+          git config user.email blackspirits@gmail.com
+          git add app/Services/TorrentClients public/js/PollingService.js tests/Frontend/PollingReliability.mjs tests/Unit/PollingReliabilityTest.php tests/Unit/Services/QBittorrentSessionReuseTest.php tests/Unit/Services/TorrentClientHttpPolicyTest.php
+          git commit -m 'perf: bound torrent polling and client HTTP requests'
+          test "$(git rev-parse HEAD^)" = "$PR06"
+          test "$(git diff --name-only "$PR06" HEAD | wc -l)" -eq 16
+          test -z "$(git status --porcelain)"
+          git push origin HEAD:refs/heads/audit/pr-07-polling-reliability
