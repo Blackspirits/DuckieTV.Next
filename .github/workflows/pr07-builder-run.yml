@@ -56,14 +56,38 @@ jobs:
 
           # Keep the getConfigMappings() array-shape PHPDoc attached to that method,
           # not to the new PendingRequest helper. The misplaced docblock caused a
-          # 44-error Psalm cascade while runtime behavior remained correct.
+          # large Psalm cascade while runtime behavior remained correct.
           path = Path('app/Services/TorrentClients/BaseTorrentClient.php')
           text = path.read_text()
           old = """    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    protected function getConfigMappings(): array\n"""
           new = """    protected function http(): PendingRequest\n    {\n        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)\n            ->timeout(self::REQUEST_TIMEOUT_SECONDS);\n    }\n\n    /**\n     * Define mappings between internal config keys and DuckieTV settings keys.\n     *\n     * @return array<string, string>\n     */\n    protected function getConfigMappings(): array\n"""
           if text.count(old) != 1:
               raise SystemExit('BaseTorrentClient.php: expected misplaced getConfigMappings PHPDoc once')
-          path.write_text(text.replace(old, new, 1))
+          text = text.replace(old, new, 1)
+          text = text.replace('protected const CONNECT_TIMEOUT_SECONDS = 3;', 'protected const int CONNECT_TIMEOUT_SECONDS = 3;', 1)
+          text = text.replace('protected const REQUEST_TIMEOUT_SECONDS = 8;', 'protected const int REQUEST_TIMEOUT_SECONDS = 8;', 1)
+          path.write_text(text)
+
+          path = Path('app/Services/TorrentClients/QBittorrentClient.php')
+          text = path.read_text()
+          text = text.replace('private const SESSION_CACHE_TTL_SECONDS = 300;', 'private const int SESSION_CACHE_TTL_SECONDS = 300;', 1)
+
+          read_config = "    public function readConfig(): void\n"
+          if text.count(read_config) != 1:
+              raise SystemExit('QBittorrentClient.php: expected readConfig once')
+          text = text.replace(read_config, "    #[\\Override]\n" + read_config, 1)
+
+          cached_request = """        if ($this->cookie !== null) {\n            $response = $this->http()\n                ->withHeaders(['Cookie' => $this->cookie])\n                ->get($this->getUrl('torrents/info'));\n"""
+          cached_request_typed = """        if ($this->cookie !== null) {\n            /** @var \\Illuminate\\Http\\Client\\Response $response */\n            $response = $this->http()\n                ->withHeaders(['Cookie' => $this->cookie])\n                ->get($this->getUrl('torrents/info'));\n"""
+          if text.count(cached_request) != 1:
+              raise SystemExit('QBittorrentClient.php: expected cached SID request once')
+          text = text.replace(cached_request, cached_request_typed, 1)
+
+          login_cookie = """            $this->cookie = $response->header('Set-Cookie');\n            $this->connected = true;\n\n            if ($this->cookie !== null) {\n                $this->cacheCookie($this->cookie);\n            }\n\n            return true;\n"""
+          login_cookie_checked = """            $this->cookie = $response->header('Set-Cookie');\n            if ($this->cookie === '') {\n                $this->connected = false;\n\n                throw new Exception('qBittorrent login succeeded without a session cookie');\n            }\n\n            $this->connected = true;\n            $this->cacheCookie($this->cookie);\n\n            return true;\n"""
+          if text.count(login_cookie) != 1:
+              raise SystemExit('QBittorrentClient.php: expected login cookie block once')
+          path.write_text(text.replace(login_cookie, login_cookie_checked, 1))
           PY
 
       - name: Verify exact candidate surface
@@ -146,17 +170,43 @@ jobs:
       - name: Psalm baseline guard
         run: |
           set +e
-          ./vendor/bin/psalm 2>&1 | tee /tmp/psalm.log
-          psalm_status=${PIPESTATUS[0]}
+          ./vendor/bin/psalm --show-info=true --output-format=json > /tmp/candidate-psalm.json
+          psalm_status=$?
           set -e
           test "$psalm_status" -eq 2
-          errors="$(grep -oE '[0-9]+ errors found' /tmp/psalm.log | tail -1 | grep -oE '^[0-9]+')"
-          others="$(grep -oE '[0-9]+ other issues found' /tmp/psalm.log | tail -1 | grep -oE '^[0-9]+')"
-          test -n "$errors"
-          test -n "$others"
-          echo "Psalm candidate: errors=$errors other_issues=$others"
-          test "$errors" -le 597
-          test "$others" -le 776
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          issues = json.loads(Path('/tmp/candidate-psalm.json').read_text())
+          counts = Counter(item.get('severity') or 'error' for item in issues)
+          errors = counts['error']
+          infos = counts['info']
+          print(f'Psalm candidate: errors={errors} other_issues={infos}')
+          if errors > 597 or infos > 776:
+              raise SystemExit(f'Psalm baseline regression: {errors}/{infos} > 597/776')
+
+          changed = {
+              'app/Services/TorrentClients/Aria2Client.php',
+              'app/Services/TorrentClients/BaseTorrentClient.php',
+              'app/Services/TorrentClients/DelugeClient.php',
+              'app/Services/TorrentClients/KTorrentClient.php',
+              'app/Services/TorrentClients/QBittorrentClient.php',
+              'app/Services/TorrentClients/RTorrentClient.php',
+              'app/Services/TorrentClients/TixatiClient.php',
+              'app/Services/TorrentClients/TransmissionClient.php',
+              'app/Services/TorrentClients/TTorrentClient.php',
+              'app/Services/TorrentClients/UTorrentClient.php',
+              'app/Services/TorrentClients/UTorrentWebUIClient.php',
+          }
+          local = [item for item in issues if item.get('file_name') in changed]
+          print(f'Psalm diagnostics in changed PHP files: {len(local)}')
+          for item in local:
+              print(item.get('severity'), item.get('file_name'), item.get('type'), item.get('message'))
+          if local:
+              raise SystemExit('PR07 changed PHP files must introduce no Psalm diagnostics')
+          PY
 
       - name: Materialize replacement candidate branch
         env:
