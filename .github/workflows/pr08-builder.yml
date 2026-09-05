@@ -38,8 +38,21 @@ jobs:
           git reset --hard "$PR07"
           test "$(git rev-parse HEAD)" = "$PR07"
 
-      - name: Apply candidate
-        run: python /tmp/pr08-build.py
+      - name: Apply candidate and narrow synchronous HTTP response
+        run: |
+          python /tmp/pr08-build.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/Services/TorrentSearchEngines/GenericSearchEngine.php')
+          text = path.read_text()
+          old = """            ])->withoutRedirecting()->get($url);\n\n            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {\n"""
+          new = """            ])->withoutRedirecting()->get($url);\n\n            if (! $response instanceof Response) {\n                throw new Exception(\"Unexpected asynchronous response while fetching details for {$this->name}\");\n            }\n\n            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {\n"""
+          if text.count(old) != 1:
+              raise SystemExit(f'expected synchronous response marker once, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
 
       - name: Verify exact candidate surface
         run: |
@@ -81,9 +94,69 @@ jobs:
       - name: NPM audit
         run: npm audit --audit-level=high
 
+      - name: Compare Psalm to exact PR07 without cache
+        env:
+          PR07: 898d0ed4341a623afcc920e76b249864bff1c19e
+        run: |
+          git add $(cat /tmp/expected)
+          git diff --cached --binary > /tmp/candidate.patch
+          git reset --hard "$PR07"
+
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/baseline.json
+          baseline_status=$?
+          set -e
+          test "$baseline_status" -eq 2
+
+          git apply --index /tmp/candidate.patch
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/candidate.json
+          candidate_status=$?
+          set -e
+          test "$candidate_status" -eq 2
+
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          def load(path):
+              data = json.loads(Path(path).read_text())
+              if not isinstance(data, list):
+                  raise SystemExit(f'unexpected Psalm JSON: {path}')
+              return data
+
+          def norm(item):
+              return (
+                  item.get('file_name') or '',
+                  item.get('type') or '',
+                  item.get('message') or '',
+                  item.get('severity') or 'error',
+              )
+
+          baseline = load('/tmp/baseline.json')
+          candidate = load('/tmp/candidate.json')
+          bc = Counter(i.get('severity') or 'error' for i in baseline)
+          cc = Counter(i.get('severity') or 'error' for i in candidate)
+          print('Psalm PR07:', dict(bc))
+          print('Psalm PR08:', dict(cc))
+          if bc['error'] != 597 or bc['info'] != 776:
+              raise SystemExit(f'PR07 baseline drift: {bc}')
+          if cc['error'] > bc['error'] or cc['info'] > bc['info']:
+              raise SystemExit(f'Psalm aggregate regression: {cc} > {bc}')
+
+          added = Counter(map(norm, candidate)) - Counter(map(norm, baseline))
+          print('New Psalm diagnostics:', sum(added.values()))
+          for diag, count in sorted(added.items()):
+              print('ADDED', count, *diag, sep=' | ')
+          if added:
+              raise SystemExit('PR08 introduces new Psalm diagnostics')
+          PY
+
       - name: Clean generated files and recheck surface
         run: |
           rm -f .env.testing
+          git reset
           { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual-final
           diff -u /tmp/expected /tmp/actual-final
 
@@ -96,6 +169,9 @@ jobs:
           git switch -C "$TARGET"
           git add $(cat /tmp/expected)
           git commit -m 'security: constrain torrent detail fetch origin'
+          test "$(git rev-parse HEAD^)" = '898d0ed4341a623afcc920e76b249864bff1c19e'
+          test "$(git diff --name-only HEAD^ HEAD | wc -l)" -eq 3
+          test -z "$(git status --porcelain)"
           git push --force-with-lease origin "$TARGET"
           echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo "candidate_files=$(git diff --name-only HEAD^ HEAD | wc -l)" >> "$GITHUB_STEP_SUMMARY"
