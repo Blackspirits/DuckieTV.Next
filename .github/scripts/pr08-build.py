@@ -17,7 +17,7 @@ if text.count(old_imports) != 1:
 text = text.replace(old_imports, new_imports, 1)
 
 old_class = "class GenericSearchEngine implements SearchEngineInterface\n{\n"
-new_class = "class GenericSearchEngine implements SearchEngineInterface\n{\n    private const MAX_DETAILS_REDIRECTS = 3;\n\n"
+new_class = "class GenericSearchEngine implements SearchEngineInterface\n{\n    private const int MAX_DETAILS_REDIRECTS = 3;\n\n"
 if text.count(old_class) != 1:
     raise SystemExit('GenericSearchEngine.php: class marker mismatch')
 text = text.replace(old_class, new_class, 1)
@@ -69,6 +69,10 @@ new_method = '''    public function getDetails(string $url, string $releaseName)
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             ])->withoutRedirecting()->get($url);
 
+            if (! $response instanceof Response) {
+                throw new Exception("Unexpected asynchronous response while fetching details for {$this->name}");
+            }
+
             if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {
                 return $response;
             }
@@ -78,7 +82,7 @@ new_method = '''    public function getDetails(string $url, string $releaseName)
             }
 
             $location = $response->header('Location');
-            if (! is_string($location) || $location === '') {
+            if ($location === '') {
                 throw new Exception("Invalid redirect while fetching details for {$this->name}");
             }
 
@@ -101,10 +105,10 @@ new_method = '''    public function getDetails(string $url, string $releaseName)
             throw new InvalidArgumentException('Invalid torrent details URL.');
         }
 
-        $targetScheme = strtolower((string) $target['scheme']);
-        $mirrorScheme = strtolower((string) $mirror['scheme']);
-        $targetHost = $this->normalizeHost((string) $target['host']);
-        $mirrorHost = $this->normalizeHost((string) $mirror['host']);
+        $targetScheme = strtolower($target['scheme']);
+        $mirrorScheme = strtolower($mirror['scheme']);
+        $targetHost = $this->normalizeHost($target['host']);
+        $mirrorHost = $this->normalizeHost($mirror['host']);
 
         if (! in_array($targetScheme, ['http', 'https'], true)
             || $targetScheme !== $mirrorScheme
