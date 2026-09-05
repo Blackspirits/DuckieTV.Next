@@ -1,0 +1,122 @@
+name: PR04 setup determinism builder
+
+on:
+  push:
+    branches:
+      - audit/pr-04-builder
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: 38103cc49befb2c891f44ae6442c1d5ceb57d46c
+      CANDIDATE_BRANCH: audit/pr-04-setup-determinism
+
+    steps:
+      - name: Checkout builder branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Preserve temporary builder helpers
+        run: |
+          cp .github/scripts/pr04-build.mjs /tmp/pr04-build.mjs
+          cp .github/scripts/pr04-validate.mjs /tmp/pr04-validate.mjs
+
+      - name: Reset to exact PR03 prerequisite
+        run: |
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git reset --hard "$BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Apply PR04 contract
+        run: node /tmp/pr04-build.mjs
+
+      - name: Regenerate npm lock from manifest
+        run: |
+          rm package-lock.json
+          npm install --package-lock-only
+
+      - name: Validate setup and lock contract
+        run: node /tmp/pr04-validate.mjs
+
+      - name: Install npm dependencies reproducibly
+        run: npm ci
+
+      - name: Record critical dependency closure
+        run: npm ls concurrently shell-quote socket.io-client engine.io-client ws | tee /tmp/npm-ls.txt
+
+      - name: Audit npm dependency closure
+        run: |
+          set +e
+          npm audit --json > /tmp/npm-audit.json
+          audit_rc=$?
+          set -e
+          node -e 'const fs=require("fs"); const a=JSON.parse(fs.readFileSync("/tmp/npm-audit.json","utf8")); const v=a.metadata?.vulnerabilities; if(!v) throw new Error("npm audit metadata missing"); console.log(JSON.stringify(v)); if((v.high||0)>0 || (v.critical||0)>0) process.exit(1);'
+          echo "npm audit exit code: $audit_rc (nonzero is acceptable only when remaining findings are below high)"
+
+      - name: Exercise clean composer setup
+        run: |
+          rm -rf vendor node_modules .env database/database.sqlite
+          composer run setup
+          test -f .env
+          test -f database/database.sqlite
+          test -d vendor
+          test -d node_modules
+          node /tmp/pr04-validate.mjs
+
+      - name: Validate Composer and Pint
+        run: |
+          composer validate --no-check-publish
+          ./vendor/bin/pint --test
+
+      - name: Run canonical Laravel suite
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+          DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test
+
+      - name: Verify exact candidate surface
+        run: |
+          printf '%s\n' \
+            '.github/workflows/Tests.yml' \
+            'composer.json' \
+            'package-lock.json' \
+            'package.json' | sort > /tmp/expected-files.txt
+          git diff --name-only "$BASE_SHA" | sort > /tmp/actual-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          git diff --check "$BASE_SHA"
+
+      - name: Materialize clean candidate branch
+        run: |
+          git checkout -B "$CANDIDATE_BRANCH"
+          git config user.name "BlackSpirits Audit Bot"
+          git config user.email "blackspirits@users.noreply.github.com"
+          git add .github/workflows/Tests.yml composer.json package.json package-lock.json
+          git commit -m "chore: make setup and npm installs reproducible"
+          git push --force origin HEAD:"$CANDIDATE_BRANCH"
+          echo "Candidate HEAD: $(git rev-parse HEAD)"
+
+      - name: Preserve npm evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr04-npm-evidence
+          path: |
+            /tmp/npm-audit.json
+            /tmp/npm-ls.txt
+          if-no-files-found: ignore
