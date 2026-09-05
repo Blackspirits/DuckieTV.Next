@@ -36,7 +36,7 @@ class TorrentDetailsRequest extends FormRequest
 
         return [
             'engine' => ['required', 'string', \Illuminate\Validation\Rule::in($engines)],
-            'url' => ['required', 'string', 'max:2048'],
+            'url' => ['required', 'url:http,https', 'max:2048'],
             'releasename' => ['required', 'string', 'max:500'],
         ];
     }
