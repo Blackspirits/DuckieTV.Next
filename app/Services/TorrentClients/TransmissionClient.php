@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\TransmissionData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Transmission torrent client implementation.
@@ -180,7 +179,7 @@ class TransmissionClient extends BaseTorrentClient
     {
         $url = rtrim($this->config['server'], '/').':'.$this->config['port'].'/'.ltrim($this->config['path'], '/');
 
-        $request = Http::withHeaders([
+        $request = $this->http()->withHeaders([
             'X-Transmission-Session-Id' => $this->sessionId ?? '',
         ]);
 

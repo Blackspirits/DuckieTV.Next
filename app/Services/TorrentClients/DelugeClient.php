@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\DelugeData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Deluge Client Implementation.
@@ -214,7 +213,7 @@ class DelugeClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/upload';
 
-            $response = Http::withCookies($this->cookie ? ['_session_id' => $this->cookie] : [], $this->getBaseDomain())
+            $response = $this->http()->withCookies($this->cookie ? ['_session_id' => $this->cookie] : [], $this->getBaseDomain())
                 ->attach('file', $data, $releaseName.'.torrent')
                 ->post($url);
 
@@ -243,7 +242,7 @@ class DelugeClient extends BaseTorrentClient
     {
         $url = $this->getBaseUrl().'/json';
 
-        $request = Http::withHeaders([
+        $request = $this->http()->withHeaders([
             'Content-Type' => 'application/json',
         ]);
 
