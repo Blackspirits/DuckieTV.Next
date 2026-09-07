@@ -110,27 +110,27 @@ class AutoDownloadService
     protected function logActivity(Serie $serie, Episode $episode, string $search, int $status, string $extra = ''): void
     {
         $searchExtra = '';
-        if ($serie->custom_search_size_min !== null || $serie->custom_search_size_max !== null) {
-            $min = $serie->custom_search_size_min ?? '-';
-            $max = $serie->custom_search_size_max ?? '-';
+        if ($serie->customSearchSizeMin !== null || $serie->customSearchSizeMax !== null) {
+            $min = $serie->customSearchSizeMin ?? '-';
+            $max = $serie->customSearchSizeMax ?? '-';
             $searchExtra = " ($min/$max)";
         }
 
-        if ($serie->custom_seeders !== null) {
-            $searchExtra .= " [{$serie->custom_seeders}]";
+        if ($serie->customSeeders !== null) {
+            $searchExtra .= " [{$serie->customSeeders}]";
         }
-        if ($serie->custom_includes !== null) {
-            $searchExtra .= " {{$serie->custom_includes}}";
+        if ($serie->customIncludes !== null) {
+            $searchExtra .= " {{$serie->customIncludes}}";
         }
-        if ($serie->custom_excludes !== null) {
-            $searchExtra .= " <{$serie->custom_excludes}>";
+        if ($serie->customExcludes !== null) {
+            $searchExtra .= " <{$serie->customExcludes}>";
         }
 
         AutoDownloadActivity::create([
             'serie_id' => $serie->id,
             'episode_id' => $episode->id,
             'search' => $search,
-            'search_provider' => $serie->search_provider ? " ({$serie->search_provider})" : '',
+            'search_provider' => $serie->searchProvider !== null && $serie->searchProvider !== '' ? " ({$serie->searchProvider})" : '',
             'search_extra' => $searchExtra,
             'status' => $status,
             'extra' => $extra,
@@ -195,13 +195,13 @@ class AutoDownloadService
         $searchString = $this->sceneNameResolver->getSearchStringForEpisode($serie, $episode);
 
         // Parity checks from AutoDownloadService.js lines 94-113
-        if ($episode->seasonnumber === 0 && ! $this->settings->get('calendar.show-specials') && $serie->ignore_hide_specials !== 1) {
+        if ($episode->seasonnumber === 0 && ! $this->settings->get('calendar.show-specials') && ! $serie->ignoreHideSpecials) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_AUTODL_DISABLED, ' HS');
 
             return;
         }
 
-        if ($serie->displaycalendar !== 1) {
+        if (! $serie->displaycalendar) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_AUTODL_DISABLED, ' HC');
 
             return;
@@ -225,13 +225,13 @@ class AutoDownloadService
             return;
         }
 
-        if ($serie->auto_download === 0) {
+        if (! $serie->autoDownload) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_AUTODL_DISABLED);
 
             return;
         }
 
-        if (! $serie->tvdb_id && ! $serie->TVDB_ID) {
+        if (! $serie->tvdb_id) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_TVDB_ID_MISSING);
 
             return;
@@ -239,7 +239,7 @@ class AutoDownloadService
 
         // Delay logic
         $settingsDelay = (int) $this->settings->get('autodownload.delay', 15);
-        $delay = $serie->custom_delay ?? $settingsDelay;
+        $delay = $serie->customDelay ?? $settingsDelay;
         $runtime = $serie->runtime ?? 60;
 
         $airedAt = Carbon::createFromTimestampMs($episode->firstaired);
@@ -258,23 +258,23 @@ class AutoDownloadService
 
     protected function performSearchAndDownload(Serie $serie, Episode $episode, string $searchString): void
     {
-        $hasCustomSeeders = $serie->custom_seeders !== null;
-        $hasCustomIncludes = $serie->custom_includes !== null;
-        $hasCustomExcludes = $serie->custom_excludes !== null;
+        $hasCustomSeeders = $serie->customSeeders !== null;
+        $hasCustomIncludes = $serie->customIncludes !== null;
+        $hasCustomExcludes = $serie->customExcludes !== null;
 
-        $minSeeders = $hasCustomSeeders ? $serie->custom_seeders : (int) $this->settings->get('torrenting.min_seeders', 50);
-        $preferredQuality = $serie->ignore_global_quality ? '' : $this->settings->get('torrenting.searchquality', '');
+        $minSeeders = $hasCustomSeeders ? $serie->customSeeders : (int) $this->settings->get('torrenting.min_seeders', 50);
+        $preferredQuality = $serie->ignoreGlobalQuality ? '' : $this->settings->get('torrenting.searchquality', '');
 
         $globalExcludes = $this->settings->get('torrenting.ignore_keywords', '');
-        $ignoreKeywords = $hasCustomExcludes ? $serie->custom_excludes.' '.$globalExcludes : $globalExcludes;
-        if ($serie->ignore_global_excludes) {
-            $ignoreKeywords = $hasCustomExcludes ? $serie->custom_excludes : '';
+        $ignoreKeywords = $hasCustomExcludes ? $serie->customExcludes.' '.$globalExcludes : $globalExcludes;
+        if ($serie->ignoreGlobalExcludes) {
+            $ignoreKeywords = $hasCustomExcludes ? $serie->customExcludes : '';
         }
 
         $globalIncludes = $this->settings->get('torrenting.require_keywords', '');
-        $requireKeywords = $hasCustomIncludes ? $serie->custom_includes.' '.$globalIncludes : $globalIncludes;
-        if ($serie->ignore_global_includes) {
-            $requireKeywords = $hasCustomIncludes ? $serie->custom_includes : '';
+        $requireKeywords = $hasCustomIncludes ? $serie->customIncludes.' '.$globalIncludes : $globalIncludes;
+        if ($serie->ignoreGlobalIncludes) {
+            $requireKeywords = $hasCustomIncludes ? $serie->customIncludes : '';
         }
 
         $globalSizeMin = $this->settings->get('torrenting.global_size_min', 0);
@@ -285,7 +285,7 @@ class AutoDownloadService
 
         $q = trim("{$searchString} {$preferredQuality} {$requireKeywordsString}");
 
-        $results = $this->searchService->search($q, $serie->search_provider);
+        $results = $this->searchService->search($q, $serie->searchProvider);
 
         if (empty($results)) {
             $this->logActivity($serie, $episode, $q, self::STATUS_NOTHING_FOUND);
@@ -395,8 +395,8 @@ class AutoDownloadService
         $parts = preg_split('/\s+/', $sizeStr);
         $value = (float) ($parts[0] ?? 0);
 
-        $min = $serie->custom_search_size_min ?? $globalMin;
-        $max = $serie->custom_search_size_max ?? $globalMax;
+        $min = $serie->customSearchSizeMin ?? $globalMin;
+        $max = $serie->customSearchSizeMax ?? $globalMax;
 
         return $value >= ($min ?? 0) && $value <= ($max ?? PHP_INT_MAX);
     }
