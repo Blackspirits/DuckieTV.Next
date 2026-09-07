@@ -53,7 +53,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $customSearchSizeMax Maximum torrent size in MB for this series
  * @property int|null $trakt_id Trakt.tv identifier, UNIQUE indexed
  * @property string|null $dlPath Custom download path for this series
- * @property int|null $customDelay Custom auto-download delay in hours
+ * @property int|null $customDelay Custom auto-download delay in minutes
  * @property string|null $alias Alternative name for search (max 250 chars)
  * @property string|null $customFormat Custom episode format (max 20 chars)
  * @property int|null $tmdb_id TheMovieDB identifier
@@ -81,6 +81,12 @@ class Serie extends Model
         'ignoreGlobalIncludes' => 'boolean',
         'ignoreGlobalExcludes' => 'boolean',
         'ignoreHideSpecials' => 'boolean',
+        'tvdb_id' => 'integer',
+        'runtime' => 'integer',
+        'customSearchSizeMin' => 'integer',
+        'customSearchSizeMax' => 'integer',
+        'customDelay' => 'integer',
+        'customSeeders' => 'integer',
     ];
 
     // ─── Relationships ──────────────────────────────────────────
