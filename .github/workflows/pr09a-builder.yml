@@ -1,0 +1,178 @@
+name: PR09a Builder
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'audit/pr-09a-builder'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Verify exact RFC prerequisite and isolate generator
+        env:
+          RFC_A: fcb82d5fc25848292ae44bd700b49dc28e99dad9
+        run: |
+          test "$(git merge-base HEAD "$RFC_A")" = "$RFC_A"
+          cp .github/scripts/pr09a-build.py /tmp/pr09a-build.py
+          git reset --hard "$RFC_A"
+          test "$(git rev-parse HEAD)" = "$RFC_A"
+
+      - name: Apply candidate
+        run: |
+          python /tmp/pr09a-build.py
+          git diff --check
+
+      - name: Verify exact candidate surface
+        run: |
+          cat > /tmp/expected <<'EOF'
+          app/Models/Serie.php
+          app/Services/AutoDownloadService.php
+          tests/Unit/Services/AutoDownloadServiceTest.php
+          EOF
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual
+          sort /tmp/expected -o /tmp/expected
+          git status --short
+          diff -u /tmp/expected /tmp/actual
+
+      - name: Reject legacy Serie property reads in canonical Service
+        run: |
+          if grep -nE '\$serie->(auto_download|custom_seeders|custom_includes|custom_excludes|custom_search_size_min|custom_search_size_max|search_provider|ignore_hide_specials|custom_delay|ignore_global_quality|ignore_global_includes|ignore_global_excludes|TVDB_ID)' app/Services/AutoDownloadService.php; then
+            echo 'legacy Serie property read remains in AutoDownloadService' >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm ci
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env.testing
+          php artisan key:generate --env=testing
+
+      - name: Focused regression
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test tests/Unit/Services/AutoDownloadServiceTest.php
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Full suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test
+
+      - name: NPM audit
+        run: npm audit --audit-level=high
+
+      - name: Compare Psalm to exact RFC base without cache
+        env:
+          RFC_A: fcb82d5fc25848292ae44bd700b49dc28e99dad9
+        run: |
+          git add $(cat /tmp/expected)
+          git diff --cached --binary > /tmp/candidate.patch
+          git reset --hard "$RFC_A"
+
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/baseline.json
+          baseline_status=$?
+          set -e
+          test "$baseline_status" -eq 2
+
+          git apply --index /tmp/candidate.patch
+          set +e
+          ./vendor/bin/psalm --no-cache --show-info=true --output-format=json > /tmp/candidate.json
+          candidate_status=$?
+          set -e
+          test "$candidate_status" -eq 2
+
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          def load(path):
+              data = json.loads(Path(path).read_text())
+              if not isinstance(data, list):
+                  raise SystemExit(f'unexpected Psalm JSON: {path}')
+              return data
+
+          def norm(item):
+              return (
+                  item.get('file_name') or '',
+                  item.get('type') or '',
+                  item.get('message') or '',
+                  item.get('severity') or 'error',
+              )
+
+          baseline = load('/tmp/baseline.json')
+          candidate = load('/tmp/candidate.json')
+          bc = Counter(i.get('severity') or 'error' for i in baseline)
+          cc = Counter(i.get('severity') or 'error' for i in candidate)
+          print('Psalm RFC base:', dict(bc))
+          print('Psalm PR09a:', dict(cc))
+
+          baseline_diags = Counter(map(norm, baseline))
+          candidate_diags = Counter(map(norm, candidate))
+          added = candidate_diags - baseline_diags
+          removed = baseline_diags - candidate_diags
+
+          print('New Psalm diagnostics:', sum(added.values()))
+          for diag, count in sorted(added.items()):
+              print('ADDED', count, *diag, sep=' | ')
+          print('Removed Psalm diagnostics:', sum(removed.values()))
+          for diag, count in sorted(removed.items()):
+              print('REMOVED', count, *diag, sep=' | ')
+
+          if added:
+              raise SystemExit('PR09a introduces new Psalm diagnostics')
+          PY
+
+      - name: Clean generated files and recheck surface
+        run: |
+          rm -f .env.testing
+          git reset
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > /tmp/actual-final
+          diff -u /tmp/expected /tmp/actual-final
+
+      - name: Materialize final branch
+        env:
+          TARGET: audit/pr-09a-serie-model-contract
+          RFC_A: fcb82d5fc25848292ae44bd700b49dc28e99dad9
+        run: |
+          git config user.name 'BlackSpirits'
+          git config user.email 'blackspirits@gmail.com'
+          git switch -C "$TARGET"
+          git add $(cat /tmp/expected)
+          git commit -m 'fix: align auto-download series model contract'
+          test "$(git rev-parse HEAD^)" = "$RFC_A"
+          test "$(git diff --name-only HEAD^ HEAD | wc -l)" -eq 3
+          test -z "$(git status --porcelain)"
+          git push --force-with-lease origin "$TARGET"
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate_files=$(git diff --name-only HEAD^ HEAD | wc -l)" >> "$GITHUB_STEP_SUMMARY"
