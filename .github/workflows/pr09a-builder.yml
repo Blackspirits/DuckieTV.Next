@@ -35,12 +35,14 @@ jobs:
         run: |
           test "$(git merge-base HEAD "$RFC_A")" = "$RFC_A"
           cp .github/scripts/pr09a-build.py /tmp/pr09a-build.py
+          cp .github/scripts/pr09a-psalm-fix.py /tmp/pr09a-psalm-fix.py
           git reset --hard "$RFC_A"
           test "$(git rev-parse HEAD)" = "$RFC_A"
 
       - name: Apply candidate
         run: |
           python /tmp/pr09a-build.py
+          python /tmp/pr09a-psalm-fix.py
           git diff --check
 
       - name: Verify exact candidate surface
