@@ -2,6 +2,7 @@
 
 namespace App\Services\TorrentSearchEngines;
 
+use App\Support\TorrentSize;
 use Exception;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
@@ -63,7 +64,7 @@ class GenericSearchEngine implements SearchEngineInterface
      *
      * @param  string  $query  The search query
      * @param  string|null  $sortBy  Sorting parameter (e.g. 'seeders.d')
-     * @return array Array of results with releasename, size, seeders, leechers, magnetUrl, etc.
+     * @return array Array of results with releasename, sizeBytes, sizeParseError, seeders, leechers, magnetUrl, etc.
      *
      * @throws Exception if the HTTP request fails
      */
@@ -269,9 +270,15 @@ class GenericSearchEngine implements SearchEngineInterface
             $seeders = (int) preg_replace('/[^0-9]/', '', $seeders ?? '0');
             $leechers = (int) preg_replace('/[^0-9]/', '', $leechers ?? '0');
 
+            $rawSize = $this->getPropertyForSelector($node, $selectors['size']);
+            $parsedSize = TorrentSize::parse($rawSize);
+
             $out = [
                 'releasename' => trim($releasename),
-                'size' => $this->sizeToMB($this->getPropertyForSelector($node, $selectors['size'])),
+                'sizeBytes' => $parsedSize['sizeBytes'],
+                'sizeParseError' => $parsedSize['sizeParseError'],
+                // Transitional presentation-only field for JSON compatibility.
+                'size' => TorrentSize::format($parsedSize['sizeBytes']),
                 'seeders' => $seeders,
                 'leechers' => $leechers,
                 'detailUrl' => (($this->config['includeBaseURL'] ?? false) ? $this->config['mirror'] : '').$this->getPropertyForSelector($node, $selectors['detailUrl']),
@@ -372,46 +379,5 @@ class GenericSearchEngine implements SearchEngineInterface
         } catch (Exception $e) {
             return null;
         }
-    }
-
-    /**
-     * Convert various size strings (GB, MB, KiB, etc.) to a standardized MB string.
-     *
-     * @return string Converted size (e.g., "123.45 MB")
-     */
-    protected function sizeToMB(?string $size): string
-    {
-        if (! $size) {
-            return '0 MB';
-        }
-
-        if (preg_match('/([0-9.]+)\s*([KTMG]B|[KTMG]iB|Bytes|B)/i', $size, $matches)) {
-            $value = (float) $matches[1];
-            $unit = strtoupper($matches[2]);
-
-            switch ($unit) {
-                case 'B':
-                case 'BYTES':
-                    return number_format($value / 1000 / 1000, 2).' MB';
-                case 'KB':
-                    return number_format($value / 1000, 2).' MB';
-                case 'MB':
-                    return number_format($value, 2).' MB';
-                case 'GB':
-                    return number_format($value * 1000, 2).' MB';
-                case 'TB':
-                    return number_format($value * 1000 * 1000, 2).' MB';
-                case 'KIB':
-                    return number_format(($value * 1024) / 1000 / 1000, 2).' MB';
-                case 'MIB':
-                    return number_format(($value * 1024 * 1024) / 1000 / 1000, 2).' MB';
-                case 'GIB':
-                    return number_format(($value * 1024 * 1024 * 1024) / 1000 / 1000, 2).' MB';
-                case 'TIB':
-                    return number_format(($value * 1024 * 1024 * 1024 * 1024) / 1000 / 1000, 2).' MB';
-            }
-        }
-
-        return $size;
     }
 }

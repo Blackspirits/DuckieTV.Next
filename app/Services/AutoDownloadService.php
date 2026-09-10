@@ -309,8 +309,11 @@ class AutoDownloadService
                 continue;
             }
 
-            if (! $this->filterBySize($item['size'] ?? null, $serie, $globalSizeMin, $globalSizeMax)) {
-                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, ' S');
+            $sizeBytes = isset($item['sizeBytes']) && is_int($item['sizeBytes']) ? $item['sizeBytes'] : null;
+            $sizeParseError = (bool) ($item['sizeParseError'] ?? false);
+            if (! $this->filterBySize($sizeBytes, $sizeParseError, $serie, $globalSizeMin, $globalSizeMax)) {
+                $extra = $sizeParseError ? ' S (size parse error)' : ' S';
+                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, $extra);
 
                 continue;
             }
@@ -381,24 +384,24 @@ class AutoDownloadService
         return true;
     }
 
-    protected function filterBySize(?string $sizeStr, Serie $serie, $globalMin, $globalMax): bool
+    protected function filterBySize(?int $sizeBytes, bool $sizeParseError, Serie $serie, $globalMin, $globalMax): bool
     {
-        if ($sizeStr === null || $sizeStr === 'n/a') {
+        if ($sizeParseError) {
+            return false;
+        }
+
+        // A genuinely unknown source size remains eligible, matching historical behavior.
+        if ($sizeBytes === null) {
             return true;
         }
 
-        /**
-         * 100% Ported Line 261: size split into value and unit.
-         * NOTE: Original logic DOES NOT normalize GB to MB. It just compares the prefix number.
-         * If min is 500 (MB) and result is "1.5 GB", it compares 1.5 to 500. Result: false.
-         */
-        $parts = preg_split('/\s+/', $sizeStr);
-        $value = (float) ($parts[0] ?? 0);
+        $minMb = $serie->customSearchSizeMin ?? ($globalMin === null ? null : (int) $globalMin);
+        $maxMb = $serie->customSearchSizeMax ?? ($globalMax === null ? null : (int) $globalMax);
 
-        $min = $serie->customSearchSizeMin ?? $globalMin;
-        $max = $serie->customSearchSizeMax ?? $globalMax;
+        $minBytes = ($minMb ?? 0) * 1_000_000;
+        $maxBytes = $maxMb === null ? PHP_INT_MAX : $maxMb * 1_000_000;
 
-        return $value >= ($min ?? 0) && $value <= ($max ?? PHP_INT_MAX);
+        return $sizeBytes >= $minBytes && $sizeBytes <= $maxBytes;
     }
 
     protected function download(Serie $serie, Episode $episode, array $item, string $searchQuery): void

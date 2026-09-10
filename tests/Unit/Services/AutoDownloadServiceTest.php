@@ -71,28 +71,40 @@ class AutoDownloadServiceTest extends TestCase
         }
     }
 
-    /**
-     * Test size filtering logic.
-     * Parity Check: Ensure NO normalization happens (1.5 GB is NOT > 500 MB if 1.5 is compared to 500)
-     */
-    public function test_filter_by_size_no_normalization_parity()
+    public function test_filter_by_size_uses_typed_bytes_and_decimal_mb_thresholds(): void
     {
         $serie = new Serie(['customSearchSizeMin' => 100, 'customSearchSizeMax' => 500]);
 
         $cases = [
-            ['size' => '250 MB', 'expected' => true],
-            ['size' => '50 MB',  'expected' => false],
-            ['size' => '1.5 GB', 'expected' => false], // 100% Parity: 1.5 is NOT between 100 and 500.
-            ['size' => '550 MB', 'expected' => false],
-            ['size' => '100 MB', 'expected' => true],
-            ['size' => '500 MB', 'expected' => true],
-            ['size' => null,     'expected' => true],
+            ['sizeBytes' => 100_000_000, 'parseError' => false, 'expected' => true],
+            ['sizeBytes' => 500_000_000, 'parseError' => false, 'expected' => true],
+            ['sizeBytes' => 99_999_999, 'parseError' => false, 'expected' => false],
+            ['sizeBytes' => 500_000_001, 'parseError' => false, 'expected' => false],
+            ['sizeBytes' => null, 'parseError' => false, 'expected' => true],
+            ['sizeBytes' => null, 'parseError' => true, 'expected' => false],
         ];
 
         foreach ($cases as $case) {
-            $result = $this->invokePrivateMethod($this->service, 'filterBySize', [$case['size'], $serie, 0, 1000]);
-            $this->assertEquals($case['expected'], $result, 'Failed for size: '.$case['size']);
+            $result = $this->invokePrivateMethod(
+                $this->service,
+                'filterBySize',
+                [$case['sizeBytes'], $case['parseError'], $serie, null, null]
+            );
+            $this->assertSame($case['expected'], $result);
         }
+    }
+
+    public function test_filter_by_size_treats_null_global_thresholds_as_unbounded(): void
+    {
+        $serie = new Serie(['customSearchSizeMin' => null, 'customSearchSizeMax' => null]);
+
+        $result = $this->invokePrivateMethod(
+            $this->service,
+            'filterBySize',
+            [5_000_000_000, false, $serie, null, null]
+        );
+
+        $this->assertTrue($result);
     }
 
     /**
@@ -220,6 +232,50 @@ class AutoDownloadServiceTest extends TestCase
         $this->assertSame(AutoDownloadService::STATUS_NOTHING_FOUND, (int) $activity->status);
         $this->assertSame(' (1337x)', $activity->search_provider);
         $this->assertSame(' (100/500) [12] {HEVC} <CAM>', $activity->search_extra);
+    }
+
+    public function test_size_parser_failure_is_filtered_and_recorded_diagnostically(): void
+    {
+        $episode = $this->createPersistedEpisode();
+
+        $this->sceneNameMock
+            ->shouldReceive('getSearchStringForEpisode')
+            ->once()
+            ->andReturn('Contract Show s01e01');
+
+        $settings = [
+            'autodownload.delay' => 15,
+            'torrenting.min_seeders' => 50,
+            'torrenting.searchquality' => '',
+            'torrenting.ignore_keywords' => '',
+            'torrenting.require_keywords' => '',
+            'torrenting.global_size_min' => null,
+            'torrenting.global_size_max' => null,
+            'torrenting.require_keywords_mode_or' => true,
+        ];
+        $this->settingsMock
+            ->shouldReceive('get')
+            ->zeroOrMoreTimes()
+            ->andReturnUsing(fn (string $key, mixed $default = null) => array_key_exists($key, $settings) ? $settings[$key] : $default);
+
+        $this->searchMock
+            ->shouldReceive('search')
+            ->once()
+            ->andReturn([[
+                'releasename' => 'Contract.Show.s01e01',
+                'sizeBytes' => null,
+                'sizeParseError' => true,
+                'seeders' => 100,
+            ]]);
+
+        $this->invokePrivateMethod($this->service, 'processEpisode', [$episode]);
+
+        $activity = AutoDownloadActivity::query()
+            ->where('status', AutoDownloadService::STATUS_FILTERED_OUT)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame(' S (size parse error)', $activity->extra);
     }
 
     public function test_persisted_hidden_serie_is_excluded_before_search(): void
