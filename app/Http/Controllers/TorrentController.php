@@ -85,7 +85,9 @@ class TorrentController extends Controller
      *
      * Results structure per item:
      * - releasename: string — torrent release name
-     * - size: string — human-readable size (e.g., "1.23 GB")
+     * - sizeBytes: int|null — canonical machine size in bytes
+     * - sizeParseError: bool — true when a non-empty source size could not be parsed
+     * - size: string — transitional presentation-only size
      * - seeders: int — number of seeders
      * - leechers: int — number of leechers
      * - magnetUrl: string|null — magnet link (if available from search page)

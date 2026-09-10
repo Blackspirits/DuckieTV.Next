@@ -81,6 +81,8 @@ class ShowRSSEngine extends GenericSearchEngine
                     $results[] = [
                         'releasename' => $releaseName,
                         'magnetUrl' => $magnetUrl,
+                        'sizeBytes' => null,
+                        'sizeParseError' => false,
                         'size' => 'n/a',
                         'seeders' => 1,
                         'leechers' => 0,

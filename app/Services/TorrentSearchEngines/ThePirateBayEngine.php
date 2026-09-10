@@ -22,7 +22,7 @@ class ThePirateBayEngine extends GenericSearchEngine
                 'resultContainer' => '#searchResult tbody tr',
                 'releasename' => ['td:nth-child(2) > div', 'innerText'],
                 'magnetUrl' => ['td:nth-child(2) > a', 'href'],
-                'size' => ['td:nth-child(2) .detDesc', 'innerText'], // Custom parser logic in PHP
+                'size' => ['td:nth-child(2) .detDesc', 'innerText'], // Preserve full source text so magnitude + original unit remain available
                 'seeders' => ['td:nth-child(3)', 'innerHTML'],
                 'leechers' => ['td:nth-child(4)', 'innerHTML'],
                 'detailUrl' => ['a.detLink', 'href'],
@@ -34,23 +34,5 @@ class ThePirateBayEngine extends GenericSearchEngine
                 'size' => ['d' => '5', 'a' => '6'],
             ],
         ]);
-    }
-
-    protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string
-    {
-        $value = parent::getPropertyForSelector($node, $propertyConfig);
-
-        if ($value && $propertyConfig === $this->config['selectors']['size']) {
-            // Equivalent to text.split(', ')[1].split(' ')[1].replace('i', '')
-            $parts = explode(', ', $value);
-            if (count($parts) > 1) {
-                $subParts = explode(' ', $parts[1]);
-                if (count($subParts) > 1) {
-                    return str_replace('i', '', $subParts[1]);
-                }
-            }
-        }
-
-        return $value;
     }
 }

@@ -55,29 +55,17 @@ class GenericSearchEngineTest extends TestCase
         $this->assertCount(2, $results);
 
         $this->assertEquals('Release 1', $results[0]['releasename']);
-        $this->assertEquals('1,500.00 MB', $results[0]['size']);
+        $this->assertSame(1_500_000_000, $results[0]['sizeBytes']);
+        $this->assertFalse($results[0]['sizeParseError']);
+        $this->assertSame('1.5 GB', $results[0]['size']);
         $this->assertEquals(100, $results[0]['seeders']);
         $this->assertEquals(50, $results[0]['leechers']);
         $this->assertEquals('magnet:?xt=urn:btih:HASH1', $results[0]['magnetUrl']);
         $this->assertEquals('https://mock.engine/details/1', $results[0]['detailUrl']);
 
         $this->assertEquals('Release 2', $results[1]['releasename']);
-        $this->assertEquals('800.00 MB', $results[1]['size']);
-    }
-
-    public function test_it_handles_size_conversion()
-    {
-        $engine = new GenericSearchEngine($this->mockConfig);
-
-        // Use reflection to test protected sizeToMB method
-        $reflection = new \ReflectionClass(GenericSearchEngine::class);
-        $method = $reflection->getMethod('sizeToMB');
-        $method->setAccessible(true);
-
-        $this->assertEquals('1,000.00 MB', $method->invokeArgs($engine, ['1 GB']));
-        $this->assertEquals('1,000.00 MB', $method->invokeArgs($engine, ['1000 MB']));
-        $this->assertEquals('0.50 MB', $method->invokeArgs($engine, ['500 KB']));
-        $this->assertEquals('1.05 MB', $method->invokeArgs($engine, ['1 MiB']));
-        $this->assertEquals('1,073.74 MB', $method->invokeArgs($engine, ['1 GiB']));
+        $this->assertSame(800_000_000, $results[1]['sizeBytes']);
+        $this->assertFalse($results[1]['sizeParseError']);
+        $this->assertSame('800 MB', $results[1]['size']);
     }
 }
