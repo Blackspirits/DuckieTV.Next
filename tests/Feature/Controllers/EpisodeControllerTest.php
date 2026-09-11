@@ -46,12 +46,12 @@ class EpisodeControllerTest extends TestCase
             'serie_id' => $serie->id,
             'episodename' => 'The Ep',
             'trakt_id' => 222,
-            'magnetHash' => 'hash123',
+            'magnetHash' => '0123456789ABCDEF0123456789ABCDEF01234567',
         ]);
 
         $mockTorrent = Mockery::mock(TorrentData::class);
-        $mockTorrent->shouldReceive('getInfoHash')->andReturn('hash123');
-        $mockTorrent->shouldReceive('getName')->andReturn('The Show S01E01');
+        $mockTorrent->shouldReceive('getInfoHash')->andReturn('0123456789abcdef0123456789abcdef01234567');
+        $mockTorrent->shouldReceive('getName')->andReturn('Unrelated.Release');
         $mockTorrent->shouldReceive('getProgress')->andReturn(50.0);
         $mockTorrent->shouldReceive('getFiles')->andReturn([]);
         $mockTorrent->shouldReceive('isStarted')->andReturn(true);

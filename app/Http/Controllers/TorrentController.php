@@ -7,6 +7,7 @@ use App\Http\Requests\TorrentDialogRequest;
 use App\Http\Requests\TorrentSearchRequest;
 use App\Services\SettingsService;
 use App\Services\TorrentSearchService;
+use App\Support\MagnetUri;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
@@ -196,15 +197,27 @@ class TorrentController extends Controller
             $label = $request->validated('label') ?? 'DuckieTV';
             $episodeId = $request->validated('episode_id');
 
-            // Extract infoHash from magnet if not provided
-            $infoHash = $request->validated('infoHash');
-            if (! $infoHash && $request->has('magnet')) {
-                $infoHash = \App\Support\MagnetUri::extractInfoHash($request->validated('magnet'));
+            $providedInfoHash = $request->validated('infoHash');
+            if ($request->has('magnet')) {
+                // The BTIH embedded in the magnet is authoritative over any caller-supplied hash.
+                $infoHash = MagnetUri::extractInfoHash($request->validated('magnet'));
+            } else {
+                $infoHash = $providedInfoHash === null || $providedInfoHash === ''
+                    ? null
+                    : MagnetUri::normalizeInfoHash($providedInfoHash);
+
+                if ($providedInfoHash !== null && $providedInfoHash !== '' && $infoHash === null) {
+                    return response()->json(['error' => 'Invalid torrent infoHash'], 422);
+                }
+            }
+
+            if ($episodeId !== null && $infoHash === null) {
+                return response()->json(['error' => 'Cannot track episode torrent without a canonical BTIH'], 422);
             }
 
             // Resolve the episode now, but do not mutate local state until the external add succeeds.
             $episode = null;
-            if ($episodeId) {
+            if ($episodeId !== null) {
                 /** @var \App\Models\Episode|null $episode */
                 $episode = \App\Models\Episode::find($episodeId);
             }
@@ -348,16 +361,23 @@ class TorrentController extends Controller
             try {
                 if ($client->connect()) {
                     $torrents = $client->getTorrents();
-                    // Search for the torrent with the matching infoHash
+                    // Search by canonical BTIH when possible, while preserving non-BTIH transport identifiers.
+                    $requestedHash = MagnetUri::normalizeInfoHash($infoHash);
                     foreach ($torrents as $t) {
-                        // Assuming the client returns objects with getInfoHash() or similar
-                        // Let's check the TorrentClientInterface or a specific client to be sure
-                        if (method_exists($t, 'getInfoHash') && $t->getInfoHash() === $infoHash) {
-                            $torrent = $t;
-                            break;
+                        $rawHash = method_exists($t, 'getInfoHash')
+                            ? $t->getInfoHash()
+                            : ($t->infoHash ?? null);
+
+                        if (! is_string($rawHash)) {
+                            continue;
                         }
-                        // Some clients might store it in a public property or another method
-                        if (isset($t->infoHash) && $t->infoHash === $infoHash) {
+
+                        $remoteHash = MagnetUri::normalizeInfoHash($rawHash);
+                        $matches = $requestedHash !== null
+                            ? $remoteHash === $requestedHash
+                            : $rawHash === $infoHash;
+
+                        if ($matches) {
                             $torrent = $t;
                             break;
                         }

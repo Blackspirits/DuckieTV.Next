@@ -2,6 +2,7 @@
 
 namespace App\Services\TorrentSearchEngines;
 
+use App\Support\MagnetUri;
 use App\Support\TorrentSize;
 use Exception;
 use GuzzleHttp\Psr7\Uri;
@@ -289,16 +290,22 @@ class GenericSearchEngine implements SearchEngineInterface
             $magnet = $this->getPropertyForSelector($node, $selectors['magnetUrl'] ?? null);
             $torrent = $this->getPropertyForSelector($node, $selectors['torrentUrl'] ?? null);
 
+            $infoHash = $magnet ? MagnetUri::extractInfoHash($magnet) : null;
+
             if ($magnet) {
                 $out['magnetUrl'] = $magnet;
                 $out['noMagnet'] = false;
             }
 
+            if ($infoHash !== null) {
+                $out['infoHash'] = $infoHash;
+            }
+
             if ($torrent) {
                 $out['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
                 $out['noTorrent'] = false;
-            } elseif (isset($out['magnetUrl']) && preg_match('/([0-9ABCDEFabcdef]{40})/', $out['magnetUrl'], $matches)) {
-                $out['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($matches[1]).'.torrent?title='.urlencode(trim($out['releasename']));
+            } elseif ($infoHash !== null) {
+                $out['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($out['releasename']));
                 $out['noTorrent'] = false;
             }
 
@@ -333,15 +340,21 @@ class GenericSearchEngine implements SearchEngineInterface
         $output = [];
         $magnet = $this->getPropertyForSelector($container, $selectors['magnetUrl'] ?? null);
 
+        $infoHash = $magnet ? MagnetUri::extractInfoHash($magnet) : null;
+
         if ($magnet) {
             $output['magnetUrl'] = $magnet;
+        }
+
+        if ($infoHash !== null) {
+            $output['infoHash'] = $infoHash;
         }
 
         $torrent = $this->getPropertyForSelector($container, $selectors['torrentUrl'] ?? null);
         if ($torrent) {
             $output['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
-        } elseif (isset($output['magnetUrl']) && preg_match('/([0-9ABCDEFabcdef]{40})/', $output['magnetUrl'], $matches)) {
-            $output['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($matches[1]).'.torrent?title='.urlencode(trim($releaseName));
+        } elseif ($infoHash !== null) {
+            $output['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($releaseName));
         }
 
         return $output;

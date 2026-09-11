@@ -8,6 +8,7 @@ use App\Services\FavoritesService;
 use App\Services\SettingsService;
 use App\Services\TorrentClients\TorrentClientInterface;
 use App\Services\TorrentSearchService;
+use App\Support\MagnetUri;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -356,9 +357,14 @@ class AutoDownloadJob implements ShouldQueue
                     continue; // Skip if no magnet found even after details
                 }
 
+                $infoHash = MagnetUri::extractInfoHash($result['magnetUrl']);
+                if ($infoHash === null) {
+                    continue;
+                }
+
                 $dlPath = $settings->get('torrenting.directory');
                 if ($torrentClient->addMagnet($result['magnetUrl'], $dlPath, 'DuckieTV')) {
-                    $episode->magnetHash = $this->extractHash($result['magnetUrl']);
+                    $episode->magnetHash = $infoHash;
                     // Use a manual save to avoid triggering events if necessary,
                     // though standard save is fine for Phase 3.
                     $episode->save();
@@ -373,22 +379,6 @@ class AutoDownloadJob implements ShouldQueue
         }
 
         $this->logActivity($query, 5); // Filtered out or no valid magnets
-    }
-
-    /**
-     * Extract infohash from a magnet link.
-     */
-    private function extractHash(string $magnet): ?string
-    {
-        if (preg_match('/btih:([a-f0-9]{40})/i', $magnet, $matches)) {
-            return strtoupper($matches[1]);
-        }
-        if (preg_match('/btih:([a-z2-7]{32})/i', $magnet, $matches)) {
-            // base32 to hex conversion could be added here if needed
-            return strtoupper($matches[1]);
-        }
-
-        return null;
     }
 
     // ─── Filter Methods (documented for Phase 3) ─────────────────

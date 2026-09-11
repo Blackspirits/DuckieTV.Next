@@ -64,6 +64,7 @@ class TorrentSearchSizeContractTest extends TestCase
         $this->assertNull($results[0]['sizeBytes']);
         $this->assertFalse($results[0]['sizeParseError']);
         $this->assertSame('n/a', $results[0]['size']);
+        $this->assertSame(str_repeat('b', 40), $results[0]['infoHash']);
     }
 
     public function test_results_view_derives_presentation_from_size_bytes_not_legacy_size(): void

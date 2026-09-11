@@ -150,6 +150,6 @@ class AddTorrentTest extends TestCase
 
         $episode->refresh();
         $this->assertEquals(1, $episode->downloaded);
-        $this->assertEquals(strtoupper($infoHash), $episode->magnetHash);
+        $this->assertSame(strtolower($infoHash), $episode->magnetHash);
     }
 }

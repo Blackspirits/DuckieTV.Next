@@ -9,6 +9,7 @@ use App\Services\AutoDownloadService;
 use App\Services\FavoritesService;
 use App\Services\SceneNameResolverService;
 use App\Services\SettingsService;
+use App\Services\TorrentClients\TorrentClientInterface;
 use App\Services\TorrentClientService;
 use App\Services\TorrentSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -276,6 +277,82 @@ class AutoDownloadServiceTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(' S (size parse error)', $activity->extra);
+    }
+
+    public function test_remote_torrent_map_uses_only_canonical_btih_keys(): void
+    {
+        $validHash = '0123456789ABCDEF0123456789ABCDEF01234567';
+
+        $validTorrent = new \App\DTOs\TorrentData\TransmissionData(['infoHash' => $validHash]);
+        $transportOnlyTorrent = new \App\DTOs\TorrentData\TransmissionData(['infoHash' => 'aria2-gid-123']);
+
+        $client = Mockery::mock(TorrentClientInterface::class);
+        $client->shouldReceive('isConnected')->once()->andReturn(true);
+        $client->shouldReceive('getTorrents')->once()->andReturn([$validTorrent, $transportOnlyTorrent]);
+
+        $this->torrentClientMock->shouldReceive('getActiveClient')->once()->andReturn($client);
+
+        $settings = [
+            'torrenting.autodownload' => true,
+            'autodownload.lastrun' => null,
+            'autodownload.period' => 1,
+        ];
+        $this->settingsMock
+            ->shouldReceive('get')
+            ->andReturnUsing(fn (string $key, mixed $default = null) => array_key_exists($key, $settings) ? $settings[$key] : $default);
+        $this->settingsMock->shouldReceive('set')->once()->with('autodownload.lastrun', Mockery::type('int'));
+
+        $this->service->check();
+
+        $reflection = new \ReflectionProperty($this->service, 'remoteTorrents');
+        $remoteTorrents = $reflection->getValue($this->service);
+
+        $this->assertSame([strtolower($validHash)], array_keys($remoteTorrents));
+        $this->assertSame($validTorrent, $remoteTorrents[strtolower($validHash)]);
+    }
+
+    public function test_download_persists_canonical_magnet_identity_only_after_client_success(): void
+    {
+        $episode = $this->createPersistedEpisode();
+        $hash = '0123456789ABCDEF0123456789ABCDEF01234567';
+        $magnet = 'magnet:?xt=urn:btih:'.$hash;
+
+        $client = Mockery::mock(TorrentClientInterface::class);
+        $client->shouldReceive('isConnected')->once()->andReturn(true);
+        $client->shouldReceive('addMagnet')->once()->with($magnet, null, 'DuckieTV')->andReturn(true);
+
+        $this->torrentClientMock->shouldReceive('getActiveClient')->once()->andReturn($client);
+        $this->settingsMock->shouldReceive('get')->once()->with('torrenting.label')->andReturn(false);
+
+        $this->invokePrivateMethod($this->service, 'download', [
+            $episode->serie,
+            $episode,
+            ['magnetUrl' => $magnet, 'releasename' => 'Contract.Show.s01e01'],
+            'Contract Show s01e01',
+        ]);
+
+        $this->assertSame(strtolower($hash), $episode->fresh()->magnetHash);
+        $activity = AutoDownloadActivity::query()->latest('id')->firstOrFail();
+        $this->assertSame(AutoDownloadService::STATUS_TORRENT_LAUNCHED, (int) $activity->status);
+    }
+
+    public function test_download_does_not_launch_tracked_torrent_without_canonical_identity(): void
+    {
+        $episode = $this->createPersistedEpisode();
+
+        $this->torrentClientMock->shouldNotReceive('getActiveClient');
+
+        $this->invokePrivateMethod($this->service, 'download', [
+            $episode->serie,
+            $episode,
+            ['torrentUrl' => 'https://example.com/file.torrent', 'releasename' => 'Contract.Show.s01e01'],
+            'Contract Show s01e01',
+        ]);
+
+        $this->assertNull($episode->fresh()->magnetHash);
+        $activity = AutoDownloadActivity::query()->latest('id')->firstOrFail();
+        $this->assertSame(AutoDownloadService::STATUS_NOTHING_FOUND, (int) $activity->status);
+        $this->assertSame(' (Missing torrent identity)', $activity->extra);
     }
 
     public function test_persisted_hidden_serie_is_excluded_before_search(): void
