@@ -6,6 +6,9 @@ use App\Models\Season;
 use App\Models\Serie;
 use App\Services\FavoritesService;
 use App\Services\SettingsService;
+use App\Services\TorrentClients\TorrentClientInterface;
+use App\Services\TorrentSearchEngines\SearchEngineInterface;
+use App\Services\TorrentSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 
@@ -159,6 +162,81 @@ it('skips specials when show-specials is disabled', function () {
     // Special episode should NOT have been downloaded
     $ep = Episode::where('trakt_id', 300)->first();
     expect($ep->downloaded)->toBe(0);
+});
+
+it('persists canonical btih from base32 magnet only after client accepts it', function () {
+    $settings = app(SettingsService::class);
+    $settings->set('torrenting.enabled', true);
+    $settings->set('torrenting.autodownload', true);
+    $settings->set('autodownload.period', 1);
+    $settings->set('autodownload.delay', 15);
+    $settings->set('torrenting.min_seeders', 50);
+    $settings->set('torrenting.searchquality', '');
+    $settings->set('torrenting.ignore_keywords', '');
+    $settings->set('torrenting.require_keywords', '');
+    $settings->set('torrenting.require_keywords_mode_or', true);
+    $settings->set('torrenting.directory', null);
+
+    $serie = Serie::create([
+        'name' => 'Base32 Show',
+        'trakt_id' => 4,
+        'tvdb_id' => 400,
+        'displaycalendar' => true,
+        'autoDownload' => true,
+        'runtime' => 30,
+    ]);
+
+    $season = Season::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'trakt_id' => 40,
+    ]);
+
+    $episode = Episode::create([
+        'serie_id' => $serie->id,
+        'season_id' => $season->id,
+        'episodename' => 'Base32 Episode',
+        'episodenumber' => 1,
+        'seasonnumber' => 1,
+        'firstaired' => now()->subHours(2)->getTimestampMs(),
+        'trakt_id' => 400,
+        'downloaded' => 0,
+        'watched' => 0,
+        'magnetHash' => null,
+    ]);
+
+    $base32Hash = 'AAISEM2EKVTHPCEZVK54ZXPO74ABCIRT';
+    $canonicalHash = '00112233445566778899aabbccddeeff00112233';
+    $magnet = 'magnet:?xt=urn:btih:'.$base32Hash;
+
+    $engine = \Mockery::mock(SearchEngineInterface::class);
+    $engine->shouldReceive('search')
+        ->once()
+        ->with('Base32 Show s01e01', 'seeders.d')
+        ->andReturn([[
+            'releasename' => 'Base32.Show.s01e01',
+            'seeders' => 100,
+            'size_bytes' => 0,
+            'magnetUrl' => $magnet,
+        ]]);
+
+    $searchService = \Mockery::mock(TorrentSearchService::class);
+    $searchService->shouldReceive('getDefaultEngine')->once()->andReturn($engine);
+
+    $torrentClient = \Mockery::mock(TorrentClientInterface::class);
+    $torrentClient->shouldReceive('addMagnet')
+        ->once()
+        ->with($magnet, null, 'DuckieTV')
+        ->andReturnUsing(function () use ($episode) {
+            expect($episode->fresh()->magnetHash)->toBeNull();
+
+            return true;
+        });
+
+    $job = new AutoDownloadJob;
+    $job->handle($settings, app(FavoritesService::class), $searchService, $torrentClient);
+
+    expect($episode->fresh()->magnetHash)->toBe($canonicalHash);
 });
 
 it('updates lastrun timestamp after check', function () {

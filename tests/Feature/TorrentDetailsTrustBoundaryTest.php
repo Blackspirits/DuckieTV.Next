@@ -54,6 +54,7 @@ it('allows the configured mirror origin', function () {
     $details = makeDetailsEngine()->getDetails('https://mirror.example/details/1', 'release');
 
     expect($details['magnetUrl'])->toStartWith('magnet:?xt=urn:btih:');
+    expect($details['infoHash'])->toBe('0123456789abcdef0123456789abcdef01234567');
     Http::assertSentCount(1);
 });
 

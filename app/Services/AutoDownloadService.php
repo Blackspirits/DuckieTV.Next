@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AutoDownloadActivity;
 use App\Models\Episode;
 use App\Models\Serie;
+use App\Support\MagnetUri;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -152,7 +153,14 @@ class AutoDownloadService
         $client = $this->torrentClientService->getActiveClient();
         if ($client && $client->isConnected()) {
             foreach ($client->getTorrents() as $torrent) {
-                $this->remoteTorrents[strtolower($torrent->infoHash)] = $torrent;
+                $rawHash = method_exists($torrent, 'getInfoHash')
+                    ? $torrent->getInfoHash()
+                    : ($torrent->infoHash ?? null);
+                $infoHash = is_string($rawHash) ? MagnetUri::normalizeInfoHash($rawHash) : null;
+
+                if ($infoHash !== null) {
+                    $this->remoteTorrents[$infoHash] = $torrent;
+                }
             }
         }
 
@@ -406,36 +414,42 @@ class AutoDownloadService
 
     protected function download(Serie $serie, Episode $episode, array $item, string $searchQuery): void
     {
+        $magnetUrl = isset($item['magnetUrl']) && is_string($item['magnetUrl']) && $item['magnetUrl'] !== ''
+            ? $item['magnetUrl']
+            : null;
+        $torrentUrl = isset($item['torrentUrl']) && is_string($item['torrentUrl']) && $item['torrentUrl'] !== ''
+            ? $item['torrentUrl']
+            : null;
+        $providedHash = isset($item['infoHash']) && is_string($item['infoHash']) ? $item['infoHash'] : null;
+        $infoHash = $magnetUrl !== null
+            ? MagnetUri::extractInfoHash($magnetUrl)
+            : MagnetUri::normalizeInfoHash($providedHash);
+
+        if ($infoHash === null) {
+            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_NOTHING_FOUND, ' (Missing torrent identity)');
+
+            return;
+        }
+
         $label = $this->settings->get('torrenting.label') ? $serie->name : 'DuckieTV';
         $client = $this->torrentClientService->getActiveClient();
         $launched = false;
 
         if ($client && $client->isConnected()) {
-            if (isset($item['magnetUrl'])) {
-                $launched = $client->addMagnet($item['magnetUrl'], $serie->dlPath, $label);
-            } elseif (isset($item['torrentUrl'])) {
-                $launched = $client->addTorrentByUrl($item['torrentUrl'], $item['infoHash'], $item['releasename'], $serie->dlPath, $label);
+            if ($magnetUrl !== null) {
+                $launched = $client->addMagnet($magnetUrl, $serie->dlPath, $label);
+            } elseif ($torrentUrl !== null) {
+                $launched = $client->addTorrentByUrl($torrentUrl, $infoHash, $item['releasename'], $serie->dlPath, $label);
             }
         }
 
         if ($launched) {
+            $episode->magnetHash = $infoHash;
+            $episode->save();
             $this->logActivity($serie, $episode, $searchQuery, self::STATUS_TORRENT_LAUNCHED);
-            if (isset($item['infoHash'])) {
-                $episode->magnetHash = strtolower($item['infoHash']);
-                $episode->save();
-            }
         } else {
             // If client is not connected or add failed, we still log it as nothing found/filtered due to connection
             $this->logActivity($serie, $episode, $searchQuery, self::STATUS_NOTHING_FOUND, ' (Torrent client error)');
         }
-    }
-
-    protected function extractHash(string $magnetUrl): ?string
-    {
-        if (preg_match('/btih:([a-f0-9]{40})/i', $magnetUrl, $matches)) {
-            return strtolower($matches[1]);
-        }
-
-        return null;
     }
 }

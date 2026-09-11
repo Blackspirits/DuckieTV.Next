@@ -52,7 +52,7 @@ class TorrentClientPanelTest extends TestCase
         $mockClient->shouldReceive('isConnected')->andReturn(true);
         $mockClient->shouldReceive('getTorrents')->andReturn([
             new \App\DTOs\TorrentData\TransmissionData([
-                'infoHash' => 'abc123',
+                'infoHash' => '0123456789abcdef0123456789abcdef01234567',
                 'name' => 'Test Torrent',
                 'progress' => 50,
                 'status' => 4, // downloading
@@ -60,14 +60,15 @@ class TorrentClientPanelTest extends TestCase
                 'files' => [['name' => 'file1.mkv']],
             ]),
         ]);
-        // Add this expectation:
-        $mockClient->shouldReceive('getTorrentFiles')->with('abc123')->andReturn([['name' => 'file1.mkv']]);
+        $mockClient->shouldReceive('getTorrentFiles')
+            ->with('0123456789abcdef0123456789abcdef01234567')
+            ->andReturn([['name' => 'file1.mkv']]);
 
         $mockService = Mockery::mock(TorrentClientService::class);
         $mockService->shouldReceive('getActiveClient')->andReturn($mockClient);
         $this->app->instance(TorrentClientService::class, $mockService);
 
-        $response = $this->get(route('torrents.show', 'abc123'));
+        $response = $this->get(route('torrents.show', '0123456789ABCDEF0123456789ABCDEF01234567'));
 
         $response->assertStatus(200);
         $response->assertViewIs('torrents.show');
