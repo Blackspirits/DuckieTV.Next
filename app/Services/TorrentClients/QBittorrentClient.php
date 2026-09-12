@@ -68,16 +68,24 @@ class QBittorrentClient extends BaseTorrentClient
     }
 
     /**
-     * Construct a full URL for a qBittorrent API endpoint.
+     * Construct the configured qBittorrent WebUI origin.
      */
-    protected function getUrl(string $path): string
+    protected function getWebUiOrigin(): string
     {
         $server = $this->config['server'] ?? 'http://localhost';
         if (! preg_match('/^https?:\/\//', $server)) {
             $server = 'http://'.$server;
         }
 
-        return rtrim($server, '/').':'.($this->config['port'] ?? '8080').'/api/v2/'.ltrim($path, '/');
+        return rtrim($server, '/').':'.($this->config['port'] ?? '8080');
+    }
+
+    /**
+     * Construct a full URL for a qBittorrent API endpoint.
+     */
+    protected function getUrl(string $path): string
+    {
+        return $this->getWebUiOrigin().'/api/v2/'.ltrim($path, '/');
     }
 
     /**
@@ -115,10 +123,13 @@ class QBittorrentClient extends BaseTorrentClient
         }
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->asForm()->post($this->getUrl('auth/login'), [
-            'username' => $this->config['username'],
-            'password' => $this->config['password'],
-        ]);
+        $response = $this->http()
+            ->withHeaders(['Origin' => $this->getWebUiOrigin()])
+            ->asForm()
+            ->post($this->getUrl('auth/login'), [
+                'username' => $this->config['username'],
+                'password' => $this->config['password'],
+            ]);
 
         if ($response->successful() && $response->body() === 'Ok.') {
             $this->cookie = $response->header('Set-Cookie');
