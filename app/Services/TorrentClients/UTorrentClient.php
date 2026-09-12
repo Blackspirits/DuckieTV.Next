@@ -58,6 +58,8 @@ class UTorrentClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
+
         if (! $this->authToken) {
             throw new Exception('uTorrent authentication token is missing. Please clear and re-connect.');
         }
@@ -71,6 +73,7 @@ class UTorrentClient extends BaseTorrentClient
 
         if (isset($response['session'])) {
             $this->sessionKey = $response['session'];
+            $this->connected = true;
 
             return true;
         }
@@ -85,8 +88,8 @@ class UTorrentClient extends BaseTorrentClient
      */
     public function getTorrents(): array
     {
-        if (! $this->sessionKey) {
-            $this->connect();
+        if (! $this->sessionKey && ! $this->connect()) {
+            return [];
         }
 
         try {
@@ -100,6 +103,8 @@ class UTorrentClient extends BaseTorrentClient
             ]);
 
             if (! isset($response['torrents']) || ! is_array($response['torrents'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -110,6 +115,8 @@ class UTorrentClient extends BaseTorrentClient
                 'status' => (string) ($torrent[21] ?? 'Unknown'),
             ]))->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }

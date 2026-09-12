@@ -51,9 +51,11 @@ class RTorrentClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
         $result = $this->rpc('system.api_version');
+        $this->connected = ! empty($result);
 
-        return ! empty($result);
+        return $this->connected;
     }
 
     /**
@@ -100,6 +102,8 @@ class RTorrentClient extends BaseTorrentClient
 
             return $torrents;
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
