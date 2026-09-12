@@ -70,6 +70,8 @@ class UTorrentWebUIClient extends BaseTorrentClient
 
             $response = $request->get($url);
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return false;
             }
 
@@ -112,6 +114,8 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $response = $this->request('list=1');
             if (! isset($response['torrents'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -123,6 +127,8 @@ class UTorrentWebUIClient extends BaseTorrentClient
                 'download_speed' => $torrent[9],
             ]))->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
