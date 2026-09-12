@@ -21,7 +21,9 @@ final class AutoDownloadRuntimePolicy
 
     public static function retryAfterSeconds(): int
     {
-        return (int) config('queue.connections.autodownload.retry_after', 90);
+        $connection = (string) config('queue.default', 'database');
+
+        return (int) config("queue.connections.{$connection}.retry_after", 90);
     }
 
     public static function outboundSafetyMarginSeconds(): int
