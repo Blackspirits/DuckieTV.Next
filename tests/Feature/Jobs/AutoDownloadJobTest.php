@@ -1,18 +1,15 @@
 <?php
 
 use App\Jobs\AutoDownloadJob;
-use App\Models\Episode;
-use App\Models\Season;
-use App\Models\Serie;
-use App\Services\FavoritesService;
-use App\Services\SettingsService;
-use App\Services\TorrentClients\TorrentClientInterface;
-use App\Services\TorrentSearchEngines\SearchEngineInterface;
-use App\Services\TorrentSearchService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Services\AutoDownloadService;
+use App\Services\TorrentClients\BaseTorrentClient;
+use App\Services\TorrentSearchEngines\GenericSearchEngine;
+use Carbon\Carbon;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
-
-uses(RefreshDatabase::class);
+use Mockery\MockInterface;
 
 it('can be dispatched to a queue', function () {
     Queue::fake();
@@ -22,230 +19,82 @@ it('can be dispatched to a queue', function () {
     Queue::assertPushed(AutoDownloadJob::class);
 });
 
-it('skips when torrenting is disabled', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', false);
-
+it('is unique at dispatch and protected against execution overlap', function () {
     $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
 
-    // Should complete without error
-    expect(true)->toBeTrue();
+    expect($job)->toBeInstanceOf(ShouldBeUnique::class)
+        ->and($job->uniqueId())->toBe('periodic-full-scan')
+        ->and($job->uniqueFor)->toBeGreaterThan(AutoDownloadJob::OVERLAP_EXPIRY_SECONDS);
+
+    $middleware = $job->middleware();
+
+    expect($middleware)->toHaveCount(1)
+        ->and($middleware[0])->toBeInstanceOf(WithoutOverlapping::class);
 });
 
-it('skips when autodownload is disabled', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', false);
+it('prevents a second execution while the overlap lock is held without releasing it for retry', function () {
+    config(['cache.default' => 'array']);
+    Cache::flush();
 
-    $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
+    $middleware = (new AutoDownloadJob)->middleware()[0];
+    $firstRan = false;
+    $secondRan = false;
 
-    expect(true)->toBeTrue();
+    $middleware->handle(new stdClass, function () use ($middleware, &$firstRan, &$secondRan): void {
+        $firstRan = true;
+
+        $middleware->handle(new stdClass, function () use (&$secondRan): void {
+            $secondRan = true;
+        });
+    });
+
+    expect($firstRan)->toBeTrue()
+        ->and($secondRan)->toBeFalse()
+        ->and($middleware->releaseAfter)->toBeNull()
+        ->and($middleware->expiresAfter)->toBe(AutoDownloadJob::OVERLAP_EXPIRY_SECONDS);
 });
 
-it('processes episode candidates and skips downloaded', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', true);
+it('keeps cooperative, in-flight IO, timeout, overlap, and queue retry budgets ordered', function () {
+    $retryAfter = (int) config('queue.connections.database.retry_after');
+    $searchRequestTimeout = (new ReflectionClass(GenericSearchEngine::class))
+        ->getReflectionConstant('REQUEST_TIMEOUT_SECONDS')
+        ?->getValue();
+    $clientRequestTimeout = (new ReflectionClass(BaseTorrentClient::class))
+        ->getReflectionConstant('REQUEST_TIMEOUT_SECONDS')
+        ?->getValue();
 
-    $serie = Serie::create([
-        'name' => 'Test Show',
-        'trakt_id' => 1,
-        'tvdb_id' => 100,
-        'displaycalendar' => true,
-        'autoDownload' => true,
-        'runtime' => 30,
-    ]);
+    expect($searchRequestTimeout)->toBeInt()
+        ->and($clientRequestTimeout)->toBeInt();
 
-    $season = Season::create([
-        'serie_id' => $serie->id,
-        'seasonnumber' => 1,
-        'trakt_id' => 10,
-    ]);
-
-    // Already downloaded episode
-    Episode::create([
-        'serie_id' => $serie->id,
-        'season_id' => $season->id,
-        'episodename' => 'Downloaded Episode',
-        'episodenumber' => 1,
-        'seasonnumber' => 1,
-        'firstaired' => now()->subDay()->getTimestampMs(),
-        'trakt_id' => 100,
-        'downloaded' => 1,
-        'watched' => 0,
-    ]);
-
+    // ShowRSS uses at most two sequential search requests. uTorrent Web UI is
+    // the widest client operation: request + one token refresh + one retry.
+    $maxInFlightIoSeconds = max(
+        2 * $searchRequestTimeout,
+        3 * $clientRequestTimeout,
+    );
     $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
 
-    // Should complete without error (episode skipped because downloaded)
-    expect(true)->toBeTrue();
+    expect(AutoDownloadJob::SCAN_BUDGET_SECONDS + $maxInFlightIoSeconds)
+        ->toBeLessThan($job->timeout)
+        ->and($job->timeout)->toBeLessThan(AutoDownloadJob::OVERLAP_EXPIRY_SECONDS)
+        ->and(AutoDownloadJob::OVERLAP_EXPIRY_SECONDS)->toBeLessThan($retryAfter)
+        ->and($job->tries)->toBe(1)
+        ->and($job->uniqueFor)->toBeGreaterThan(AutoDownloadJob::OVERLAP_EXPIRY_SECONDS);
 });
 
-it('skips episodes hidden from calendar', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', true);
+it('delegates periodic business work to the canonical service with a bounded deadline', function () {
+    Carbon::setTestNow('2026-09-12 12:00:00');
 
-    $serie = Serie::create([
-        'name' => 'Hidden Show',
-        'trakt_id' => 2,
-        'tvdb_id' => 200,
-        'displaycalendar' => false, // hidden from calendar
-        'autoDownload' => true,
-    ]);
-
-    $season = Season::create([
-        'serie_id' => $serie->id,
-        'seasonnumber' => 1,
-        'trakt_id' => 20,
-    ]);
-
-    Episode::create([
-        'serie_id' => $serie->id,
-        'season_id' => $season->id,
-        'episodename' => 'Hidden Episode',
-        'episodenumber' => 1,
-        'seasonnumber' => 1,
-        'firstaired' => now()->subHours(3)->getTimestampMs(),
-        'trakt_id' => 200,
-        'downloaded' => 0,
-        'watched' => 0,
-    ]);
-
-    $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
-
-    // Episode should NOT have been downloaded (serie hidden from calendar)
-    $ep = Episode::find(1);
-    expect($ep->downloaded)->toBe(0);
-});
-
-it('skips specials when show-specials is disabled', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', true);
-    $settings->set('calendar.show-specials', false);
-
-    $serie = Serie::create([
-        'name' => 'Special Show',
-        'trakt_id' => 3,
-        'tvdb_id' => 300,
-        'displaycalendar' => true,
-        'autoDownload' => true,
-        'ignoreHideSpecials' => false,
-    ]);
-
-    $season = Season::create([
-        'serie_id' => $serie->id,
-        'seasonnumber' => 0,
-        'trakt_id' => 30,
-    ]);
-
-    Episode::create([
-        'serie_id' => $serie->id,
-        'season_id' => $season->id,
-        'episodename' => 'Special Episode',
-        'episodenumber' => 1,
-        'seasonnumber' => 0,
-        'firstaired' => now()->subHours(3)->getTimestampMs(),
-        'trakt_id' => 300,
-        'downloaded' => 0,
-        'watched' => 0,
-    ]);
-
-    $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
-
-    // Special episode should NOT have been downloaded
-    $ep = Episode::where('trakt_id', 300)->first();
-    expect($ep->downloaded)->toBe(0);
-});
-
-it('persists canonical btih from base32 magnet only after client accepts it', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', true);
-    $settings->set('autodownload.period', 1);
-    $settings->set('autodownload.delay', 15);
-    $settings->set('torrenting.min_seeders', 50);
-    $settings->set('torrenting.searchquality', '');
-    $settings->set('torrenting.ignore_keywords', '');
-    $settings->set('torrenting.require_keywords', '');
-    $settings->set('torrenting.require_keywords_mode_or', true);
-    $settings->set('torrenting.directory', null);
-
-    $serie = Serie::create([
-        'name' => 'Base32 Show',
-        'trakt_id' => 4,
-        'tvdb_id' => 400,
-        'displaycalendar' => true,
-        'autoDownload' => true,
-        'runtime' => 30,
-    ]);
-
-    $season = Season::create([
-        'serie_id' => $serie->id,
-        'seasonnumber' => 1,
-        'trakt_id' => 40,
-    ]);
-
-    $episode = Episode::create([
-        'serie_id' => $serie->id,
-        'season_id' => $season->id,
-        'episodename' => 'Base32 Episode',
-        'episodenumber' => 1,
-        'seasonnumber' => 1,
-        'firstaired' => now()->subHours(2)->getTimestampMs(),
-        'trakt_id' => 400,
-        'downloaded' => 0,
-        'watched' => 0,
-        'magnetHash' => null,
-    ]);
-
-    $base32Hash = 'AAISEM2EKVTHPCEZVK54ZXPO74ABCIRT';
-    $canonicalHash = '00112233445566778899aabbccddeeff00112233';
-    $magnet = 'magnet:?xt=urn:btih:'.$base32Hash;
-
-    $engine = \Mockery::mock(SearchEngineInterface::class);
-    $engine->shouldReceive('search')
+    /** @var AutoDownloadService&MockInterface $service */
+    $service = Mockery::mock(AutoDownloadService::class);
+    $service->shouldReceive('check')
         ->once()
-        ->with('Base32 Show s01e01', 'seeders.d')
-        ->andReturn([[
-            'releasename' => 'Base32.Show.s01e01',
-            'seeders' => 100,
-            'size_bytes' => 0,
-            'magnetUrl' => $magnet,
-        ]]);
-
-    $searchService = \Mockery::mock(TorrentSearchService::class);
-    $searchService->shouldReceive('getDefaultEngine')->once()->andReturn($engine);
-
-    $torrentClient = \Mockery::mock(TorrentClientInterface::class);
-    $torrentClient->shouldReceive('addMagnet')
-        ->once()
-        ->with($magnet, null, 'DuckieTV')
-        ->andReturnUsing(function () use ($episode) {
-            expect($episode->fresh()->magnetHash)->toBeNull();
-
-            return true;
+        ->withArgs(function (?Carbon $deadline): bool {
+            return $deadline !== null
+                && $deadline->equalTo(now()->addSeconds(AutoDownloadJob::SCAN_BUDGET_SECONDS));
         });
 
-    $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class), $searchService, $torrentClient);
+    (new AutoDownloadJob)->handle($service);
 
-    expect($episode->fresh()->magnetHash)->toBe($canonicalHash);
-});
-
-it('updates lastrun timestamp after check', function () {
-    $settings = app(SettingsService::class);
-    $settings->set('torrenting.enabled', true);
-    $settings->set('torrenting.autodownload', true);
-
-    $job = new AutoDownloadJob;
-    $job->handle($settings, app(FavoritesService::class));
-
-    expect((int) $settings->get('autodownload.lastrun'))->toBeGreaterThan(0);
+    Carbon::setTestNow();
 });

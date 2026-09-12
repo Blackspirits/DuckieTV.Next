@@ -7,6 +7,7 @@ use App\Support\TorrentSize;
 use Exception;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
@@ -29,6 +30,10 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 class GenericSearchEngine implements SearchEngineInterface
 {
+    protected const int CONNECT_TIMEOUT_SECONDS = 3;
+
+    protected const int REQUEST_TIMEOUT_SECONDS = 8;
+
     private const int MAX_DETAILS_REDIRECTS = 3;
 
     /** @var array The search engine configuration */
@@ -74,7 +79,7 @@ class GenericSearchEngine implements SearchEngineInterface
         $url = $this->buildSearchUrl($query, $sortBy);
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::withHeaders([
+        $response = $this->boundedHttp()->withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language' => 'en-US,en;q=0.9',
@@ -119,7 +124,7 @@ class GenericSearchEngine implements SearchEngineInterface
         for ($redirects = 0; $redirects <= self::MAX_DETAILS_REDIRECTS; $redirects++) {
             $this->assertTrustedDetailsUrl($url);
 
-            $response = Http::withHeaders([
+            $response = $this->boundedHttp()->withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             ])->withoutRedirecting()->get($url);
@@ -145,6 +150,15 @@ class GenericSearchEngine implements SearchEngineInterface
         }
 
         throw new Exception("Unable to fetch details for {$this->name}");
+    }
+
+    /**
+     * Create a bounded HTTP request for all torrent-search network I/O.
+     */
+    protected function boundedHttp(): PendingRequest
+    {
+        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+            ->timeout(self::REQUEST_TIMEOUT_SECONDS);
     }
 
     /**

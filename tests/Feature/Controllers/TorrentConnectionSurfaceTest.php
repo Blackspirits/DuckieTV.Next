@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers;
 
+use App\Services\AutoDownloadLifecycleService;
 use App\Services\TorrentClients\TorrentClientInterface;
 use App\Services\TorrentClientService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,11 +35,20 @@ class TorrentConnectionSurfaceTest extends TestCase
         $client->shouldReceive('readConfig')->once();
         $client->shouldReceive('connect')->once()->andReturnTrue();
         $client->shouldReceive('getName')->once()->andReturn('MockClient');
+        $client->shouldReceive('getId')->once()->andReturn('mock-client');
 
         $service = Mockery::mock(TorrentClientService::class);
         $service->shouldReceive('getAvailableClients')->andReturn([]);
         $service->shouldReceive('getActiveClient')->once()->andReturn($client);
         $this->app->instance(TorrentClientService::class, $service);
+
+        $lifecycle = Mockery::mock(AutoDownloadLifecycleService::class);
+        $lifecycle->shouldReceive('recordClientConnectivity')
+            ->once()
+            ->with('mock-client', true)
+            ->andReturn(false);
+        $lifecycle->shouldReceive('dispatchIfEligible')->once()->andReturn(false);
+        $this->app->instance(AutoDownloadLifecycleService::class, $lifecycle);
 
         $response = $this->postJson(route('settings.update', 'torrent'), [
             'test' => 1,

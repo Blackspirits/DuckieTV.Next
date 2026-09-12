@@ -15,8 +15,8 @@ class UpdateAutoDownloadSettingsRequest extends FormRequest
     {
         return [
             'torrenting.autodownload' => 'boolean',
-            'autodownload.period' => 'numeric',
-            'autodownload.delay' => 'numeric',
+            'autodownload.period' => 'integer|min:1|max:21',
+            'autodownload.delay' => 'integer|min:0',
             'autodownload.multiSE.enabled' => 'boolean',
             'autodownload.multiSE' => 'array',
         ];
