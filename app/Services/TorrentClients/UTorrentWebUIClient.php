@@ -289,7 +289,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
      *
      * @throws Exception
      */
-    protected function request(string $query): array
+    protected function request(string $query, bool $retriedAfterTokenRefresh = false): array
     {
         $url = $this->getBaseUrl().'/gui/?token='.$this->token.'&'.$query;
 
@@ -305,13 +305,11 @@ class UTorrentWebUIClient extends BaseTorrentClient
         $response = $request->get($url);
 
         if (! $response->successful()) {
-            // If 400/401, token might have expired
-            if ($response->status() === 400 || $response->status() === 401) {
-                $this->connect();
-
-                // retry once
-                return $this->request($query);
+            $tokenExpired = $response->status() === 400 || $response->status() === 401;
+            if ($tokenExpired && ! $retriedAfterTokenRefresh && $this->connect()) {
+                return $this->request($query, true);
             }
+
             throw new Exception('uTorrent API error: '.$response->status());
         }
 

@@ -5,7 +5,6 @@ namespace App\Services\TorrentSearchEngines;
 use App\Services\SettingsService;
 use App\Support\MagnetUri;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * ShowRSS.info search engine implementation.
@@ -34,7 +33,7 @@ class ShowRSSEngine extends GenericSearchEngine
 
         try {
             // Step 1: Get the show list to find the ID
-            $response = Http::get($this->config['mirror'].'/browse');
+            $response = $this->boundedHttp()->get($this->config['mirror'].'/browse');
             if (! $response->successful()) {
                 return [];
             }
@@ -61,7 +60,7 @@ class ShowRSSEngine extends GenericSearchEngine
             }
 
             // Step 2: Get the show's page
-            $serieResponse = Http::get($this->config['mirror'].'/browse/'.$foundShowId);
+            $serieResponse = $this->boundedHttp()->get($this->config['mirror'].'/browse/'.$foundShowId);
             if (! $serieResponse->successful()) {
                 return [];
             }
