@@ -39,7 +39,7 @@ class QBittorrentHttpRuntimeTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_real_http_transport_reuses_cached_sid_and_adds_magnet(): void
+    public function test_real_http_transport_satisfies_auth_origin_and_reuses_cached_sid(): void
     {
         $port = $this->startServer();
         $settings = $this->settings($port);
@@ -65,6 +65,8 @@ class QBittorrentHttpRuntimeTest extends TestCase
         $requests = $this->requests();
         $this->assertCount(4, $requests);
         $this->assertSame('/api/v2/auth/login', $requests[0]['path']);
+        $this->assertSame('http://127.0.0.1:'.$port, $requests[0]['origin']);
+        $this->assertSame('', $requests[0]['referer']);
         $this->assertSame('/api/v2/torrents/info', $requests[1]['path']);
         $this->assertStringContainsString('SID=runtime-sid', $requests[1]['cookie']);
         $this->assertSame('/api/v2/torrents/add', $requests[2]['path']);
@@ -93,6 +95,8 @@ class QBittorrentHttpRuntimeTest extends TestCase
         $this->assertSame('/api/v2/torrents/info', $requests[0]['path']);
         $this->assertStringContainsString('SID=stale', $requests[0]['cookie']);
         $this->assertSame('/api/v2/auth/login', $requests[1]['path']);
+        $this->assertSame('http://127.0.0.1:'.$port, $requests[1]['origin']);
+        $this->assertSame('', $requests[1]['referer']);
     }
 
     private function startServer(): int
