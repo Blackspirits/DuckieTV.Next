@@ -56,14 +56,20 @@ class DelugeClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
+
         // Check if session is already valid
         $response = $this->rpc('auth.check_session');
         if ($response) {
+            $this->connected = true;
+
             return true;
         }
 
         // Login if needed
-        return $this->rpc('auth.login', [$this->config['password']]);
+        $this->connected = (bool) $this->rpc('auth.login', [$this->config['password']]);
+
+        return $this->connected;
     }
 
     /**
@@ -78,6 +84,8 @@ class DelugeClient extends BaseTorrentClient
             ]);
 
             if (! isset($data['torrents'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -90,6 +98,8 @@ class DelugeClient extends BaseTorrentClient
                 'save_path' => $task['save_path'] ?? null,
             ]))->values()->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }

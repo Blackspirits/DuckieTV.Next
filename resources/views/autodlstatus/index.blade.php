@@ -72,17 +72,41 @@
                     </td>
                     <td>
                         @switch($activity->status)
-                            @case(0) <span class="text-muted">AutoDL Disabled</span> @break
-                            @case(1) <span class="status-warning">Nothing Found</span> @break
-                            @case(2) <span class="text-muted">Filtered Out</span> @break
-                            @case(3) <span class="status-warning">Not Enough Seeders</span> @break
-                            @case(4) <span class="status-info">On Air Delay</span> @break
-                            @case(5) <span class="text-muted">Searching...</span> @break
-                            @case(6) <span class="status-success"><strong>Has Magnet</strong></span> @break
-                            @case(7) <span class="status-danger">TVDB ID Missing</span> @break
-                            @case(8) <span class="status-success">Download Initiated</span> @break
-                            @case(9) <span class="status-success">Download Success</span> @break
-                            @default {{ $activity->status }}
+                            @case(\App\Services\AutoDownloadService::STATUS_DOWNLOADED)
+                                <span class="status-success">Already Downloaded</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_WATCHED)
+                                <span class="text-muted">Already Watched</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_HAS_MAGNET)
+                                <span class="status-success"><strong>Has Magnet</strong></span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_AUTODL_DISABLED)
+                                <span class="text-muted">AutoDL Disabled</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_NOTHING_FOUND)
+                                <span class="status-warning">Nothing Found</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_FILTERED_OUT)
+                                <span class="text-muted">Filtered Out</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_TORRENT_LAUNCHED)
+                                <span class="status-success">Torrent Launched</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_NOT_ENOUGH_SEEDERS)
+                                <span class="status-warning">Not Enough Seeders</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_ON_AIR_DELAY)
+                                <span class="status-info">On Air Delay</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_TVDB_ID_MISSING)
+                                <span class="status-danger">TVDB ID Missing</span>
+                                @break
+                            @case(\App\Services\AutoDownloadService::STATUS_INFRASTRUCTURE_FAILURE)
+                                <span class="status-danger">Infrastructure Failure</span>
+                                @break
+                            @default
+                                {{ $activity->status }}
                         @endswitch
                         @if($activity->extra)
                         <small class="text-muted">{{ $activity->extra }}</small>

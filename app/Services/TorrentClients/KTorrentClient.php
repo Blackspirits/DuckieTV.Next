@@ -52,6 +52,8 @@ class KTorrentClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
+
         try {
             // First get the challenge
             /** @var \Illuminate\Http\Client\Response $response */
@@ -73,8 +75,12 @@ class KTorrentClient extends BaseTorrentClient
                 'challenge' => $sha,
             ]);
 
-            return $loginResponse->successful();
+            $this->connected = $loginResponse->successful();
+
+            return $this->connected;
         } catch (Exception $e) {
+            $this->connected = false;
+
             return false;
         }
     }
@@ -88,6 +94,8 @@ class KTorrentClient extends BaseTorrentClient
             /** @var \Illuminate\Http\Client\Response $response */
             $response = $this->http()->get($this->getBaseUrl().'/data/torrents.xml');
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -102,6 +110,8 @@ class KTorrentClient extends BaseTorrentClient
                 'id' => $index,
             ])))->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
