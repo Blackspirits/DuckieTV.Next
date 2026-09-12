@@ -2,11 +2,13 @@
 
 namespace App\Services\TorrentSearchEngines;
 
+use App\Support\AutoDownloadRuntimePolicy;
 use App\Support\MagnetUri;
 use App\Support\TorrentSize;
 use Exception;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
@@ -46,6 +48,12 @@ class GenericSearchEngine implements SearchEngineInterface
         $this->name = $config['name'] ?? 'Generic';
     }
 
+    protected function http(): PendingRequest
+    {
+        return Http::connectTimeout(AutoDownloadRuntimePolicy::CONNECT_TIMEOUT_SECONDS)
+            ->timeout(AutoDownloadRuntimePolicy::REQUEST_TIMEOUT_SECONDS);
+    }
+
     public function setName(string $name): void
     {
         $this->name = $name;
@@ -74,7 +82,7 @@ class GenericSearchEngine implements SearchEngineInterface
         $url = $this->buildSearchUrl($query, $sortBy);
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::withHeaders([
+        $response = $this->http()->withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language' => 'en-US,en;q=0.9',
@@ -119,7 +127,7 @@ class GenericSearchEngine implements SearchEngineInterface
         for ($redirects = 0; $redirects <= self::MAX_DETAILS_REDIRECTS; $redirects++) {
             $this->assertTrustedDetailsUrl($url);
 
-            $response = Http::withHeaders([
+            $response = $this->http()->withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             ])->withoutRedirecting()->get($url);
