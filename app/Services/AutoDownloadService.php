@@ -36,10 +36,11 @@ class AutoDownloadService
 
     protected ?TorrentClientInterface $activeClient = null;
 
+    protected ?Carbon $scanDeadline = null;
+
     /** @var array<string, \App\DTOs\TorrentData\TorrentDataInterface> Internal cache of remote torrents indexed by infoHash */
     protected array $remoteTorrents = [];
 
-    // Status codes matching original DuckieTV AutoDownloadService.js
     /** Episode already marked as downloaded in DB */
     public const STATUS_DOWNLOADED = 0;
 
@@ -88,13 +89,7 @@ class AutoDownloadService
     }
 
     /**
-     * Get the recent activity list from the database.
-     *
-     * In the original DuckieTV-angular, the AutoDownloadService maintained an in-memory
-     * object/array of the 'last check' results to populate the Activity Log UI.
-     * In DuckieTV.Next, we use the autodl_activities table to persist this data.
-     *
-     * @return \Illuminate\Database\Eloquent\Collection<int, AutoDownloadActivity> List of activity log entries.
+     * @return \Illuminate\Database\Eloquent\Collection<int, AutoDownloadActivity>
      */
     public function getActivityList()
     {
@@ -149,16 +144,30 @@ class AutoDownloadService
     /**
      * Main periodic check loop.
      */
-    public function check(): void
+    public function check(?Carbon $deadline = null): void
     {
+        $this->scanDeadline = $deadline;
+
         $torrentingEnabled = (bool) $this->settings->get('torrenting.enabled', true);
         if ($torrentingEnabled === false || $this->isEnabled() === false) {
             return;
         }
 
+        if ($this->scanBudgetExhausted('before client connection')) {
+            return;
+        }
+
         $this->remoteTorrents = [];
         $client = $this->establishUsableClient();
-        if ($client === null || $this->loadRemoteTorrents($client) === false) {
+        if ($client === null) {
+            return;
+        }
+
+        if ($this->scanBudgetExhausted('before remote torrent read')) {
+            return;
+        }
+
+        if ($this->loadRemoteTorrents($client) === false) {
             return;
         }
 
@@ -178,6 +187,10 @@ class AutoDownloadService
             ->get();
 
         foreach ($episodes as $episode) {
+            if ($this->scanBudgetExhausted('before candidate')) {
+                return;
+            }
+
             if ($client->isConnected() === false) {
                 Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
 
@@ -186,11 +199,19 @@ class AutoDownloadService
 
             $this->processEpisode($episode);
 
+            if ($this->scanBudgetExhausted('after candidate')) {
+                return;
+            }
+
             if ($client->isConnected() === false) {
                 Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
 
                 return;
             }
+        }
+
+        if ($this->scanBudgetExhausted('before checkpoint update')) {
+            return;
         }
 
         if ($client->isConnected() === false) {
@@ -207,6 +228,8 @@ class AutoDownloadService
      */
     public function manualDownload(Episode $episode): bool
     {
+        $this->scanDeadline = null;
+
         $serie = $episode->serie;
         if (! $serie) {
             return false;
@@ -314,6 +337,12 @@ class AutoDownloadService
 
     protected function performSearchAndDownload(Serie $serie, Episode $episode, string $searchString): bool
     {
+        if ($this->scanBudgetExhausted('before torrent search')) {
+            $this->logActivity($serie, $episode, $searchString, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Scan budget exhausted)');
+
+            return false;
+        }
+
         $hasCustomSeeders = $serie->customSeeders !== null;
         $hasCustomIncludes = $serie->customIncludes !== null;
         $hasCustomExcludes = $serie->customExcludes !== null;
@@ -422,12 +451,29 @@ class AutoDownloadService
             return false;
         }
 
+        if ($this->scanBudgetExhausted('before torrent launch')) {
+            $this->logActivity($serie, $episode, $q, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Scan budget exhausted)');
+
+            return false;
+        }
+
         return $this->download($serie, $episode, $item, $q);
     }
 
     protected function periodDays(): int
     {
         return max(1, min(21, (int) $this->settings->get('autodownload.period', 1)));
+    }
+
+    protected function scanBudgetExhausted(string $stage): bool
+    {
+        if ($this->scanDeadline === null || now()->lt($this->scanDeadline)) {
+            return false;
+        }
+
+        Log::warning('AutoDownload: Cooperative scan budget exhausted.', ['stage' => $stage]);
+
+        return true;
     }
 
     protected function establishUsableClient(): ?TorrentClientInterface
@@ -519,7 +565,7 @@ class AutoDownloadService
         if ($ignore !== '') {
             $hasIgnoredKeyword = collect(explode(' ', strtolower($ignore)))
                 ->filter()
-                ->reject(fn ($part) => str_contains($lowerQuery, $part)) // Prevent exclude list from overriding primary search string
+                ->reject(fn ($part) => str_contains($lowerQuery, $part))
                 ->contains(fn ($part) => str_contains($lowerName, $part));
 
             if ($hasIgnoredKeyword) {
@@ -536,7 +582,6 @@ class AutoDownloadService
             return false;
         }
 
-        // A genuinely unknown source size remains eligible, matching historical behavior.
         if ($sizeBytes === null) {
             return true;
         }

@@ -295,7 +295,14 @@ class TorrentController extends Controller
                 $connected = $client->connect();
                 if ($connected) {
                     $torrentList = $client->getTorrents();
-                    $activeCount = count($torrentList);
+                    $connected = $client->isConnected();
+
+                    if ($connected) {
+                        $activeCount = count($torrentList);
+                    } else {
+                        $torrentList = [];
+                        $error = 'Connection to '.$client->getName().' was lost while reading torrents.';
+                    }
                 } else {
                     $error = 'Could not connect to '.$client->getName().'. Check your settings and ensure the client is running.';
                 }
