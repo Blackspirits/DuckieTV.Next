@@ -6,6 +6,7 @@ use App\Models\AutoDownloadActivity;
 use App\Models\Episode;
 use App\Models\Serie;
 use App\Services\TorrentClients\TorrentClientInterface;
+use App\Support\AutoDownloadDeadline;
 use App\Support\MagnetUri;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +36,8 @@ class AutoDownloadService
     protected TorrentClientService $torrentClientService;
 
     protected ?TorrentClientInterface $activeClient = null;
+
+    protected bool $periodicAbortRequested = false;
 
     /** @var array<string, \App\DTOs\TorrentData\TorrentDataInterface> Internal cache of remote torrents indexed by infoHash */
     protected array $remoteTorrents = [];
@@ -149,16 +152,27 @@ class AutoDownloadService
     /**
      * Main periodic check loop.
      */
-    public function check(): void
+    public function check(?AutoDownloadDeadline $deadline = null): void
     {
+        $this->periodicAbortRequested = false;
+
         $torrentingEnabled = (bool) $this->settings->get('torrenting.enabled', true);
         if ($torrentingEnabled === false || $this->isEnabled() === false) {
             return;
         }
 
+        if ($this->deadlineReached($deadline)) {
+            return;
+        }
+
         $this->remoteTorrents = [];
         $client = $this->establishUsableClient();
-        if ($client === null || $this->loadRemoteTorrents($client) === false) {
+
+        if ($client === null || $this->deadlineReached($deadline)) {
+            return;
+        }
+
+        if ($this->loadRemoteTorrents($client) === false || $this->deadlineReached($deadline)) {
             return;
         }
 
@@ -178,19 +192,31 @@ class AutoDownloadService
             ->get();
 
         foreach ($episodes as $episode) {
+            if ($this->deadlineReached($deadline)) {
+                return;
+            }
+
             if ($client->isConnected() === false) {
                 Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
 
                 return;
             }
 
-            $this->processEpisode($episode);
+            $this->processEpisode($episode, $deadline);
+
+            if ($this->periodicAbortRequested) {
+                return;
+            }
 
             if ($client->isConnected() === false) {
                 Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
 
                 return;
             }
+        }
+
+        if ($this->deadlineReached($deadline)) {
+            return;
         }
 
         if ($client->isConnected() === false) {
@@ -242,7 +268,7 @@ class AutoDownloadService
         return $this->performSearchAndDownload($serie, $episode, $searchString);
     }
 
-    protected function processEpisode(Episode $episode): void
+    protected function processEpisode(Episode $episode, ?AutoDownloadDeadline $deadline = null): void
     {
         $serie = $episode->serie;
         if (! $serie) {
@@ -309,10 +335,19 @@ class AutoDownloadService
             return;
         }
 
-        $this->performSearchAndDownload($serie, $episode, $searchString);
+        if ($this->deadlineReached($deadline, $serie, $episode, $searchString)) {
+            return;
+        }
+
+        $this->performSearchAndDownload($serie, $episode, $searchString, $deadline);
     }
 
-    protected function performSearchAndDownload(Serie $serie, Episode $episode, string $searchString): bool
+    protected function performSearchAndDownload(
+        Serie $serie,
+        Episode $episode,
+        string $searchString,
+        ?AutoDownloadDeadline $deadline = null
+    ): bool
     {
         $hasCustomSeeders = $serie->customSeeders !== null;
         $hasCustomIncludes = $serie->customIncludes !== null;
@@ -341,12 +376,20 @@ class AutoDownloadService
 
         $q = trim("{$searchString} {$preferredQuality} {$requireKeywordsString}");
 
+        if ($this->deadlineReached($deadline, $serie, $episode, $q)) {
+            return false;
+        }
+
         try {
             $results = $this->searchService->search($q, $serie->searchProvider);
         } catch (\Throwable) {
             Log::error('AutoDownload: Torrent search failed.');
             $this->logActivity($serie, $episode, $q, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Search failed)');
 
+            return false;
+        }
+
+        if ($this->deadlineReached($deadline, $serie, $episode, $q)) {
             return false;
         }
 
@@ -422,7 +465,34 @@ class AutoDownloadService
             return false;
         }
 
-        return $this->download($serie, $episode, $item, $q);
+        if (empty($item['magnetUrl']) && empty($item['infoHash']) && ! empty($item['detailUrl'])) {
+            if ($this->deadlineReached($deadline, $serie, $episode, $q)) {
+                return false;
+            }
+
+            try {
+                $engine = $serie->searchProvider
+                    ? $this->searchService->getSearchEngine($serie->searchProvider)
+                    : $this->searchService->getDefaultEngine();
+
+                $details = $engine->getDetails(
+                    (string) $item['detailUrl'],
+                    (string) ($item['releasename'] ?? '')
+                );
+                $item = array_merge($item, $details);
+            } catch (\Throwable) {
+                Log::error('AutoDownload: Torrent details lookup failed.');
+                $this->logActivity($serie, $episode, $q, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Details lookup failed)');
+
+                return false;
+            }
+
+            if ($this->deadlineReached($deadline, $serie, $episode, $q)) {
+                return false;
+            }
+        }
+
+        return $this->download($serie, $episode, $item, $q, $deadline);
     }
 
     protected function periodDays(): int
@@ -475,6 +545,32 @@ class AutoDownloadService
             if ($infoHash !== null) {
                 $this->remoteTorrents[$infoHash] = $torrent;
             }
+        }
+
+        return true;
+    }
+
+    protected function deadlineReached(
+        ?AutoDownloadDeadline $deadline,
+        ?Serie $serie = null,
+        ?Episode $episode = null,
+        string $search = ''
+    ): bool {
+        if ($deadline === null || $deadline->expired() === false) {
+            return false;
+        }
+
+        $this->periodicAbortRequested = true;
+        Log::warning('AutoDownload: Cooperative scan deadline reached; checkpoint will not advance.');
+
+        if ($serie !== null && $episode !== null) {
+            $this->logActivity(
+                $serie,
+                $episode,
+                $search,
+                self::STATUS_INFRASTRUCTURE_FAILURE,
+                ' (Scan deadline reached)'
+            );
         }
 
         return true;
@@ -550,7 +646,13 @@ class AutoDownloadService
         return $sizeBytes >= $minBytes && $sizeBytes <= $maxBytes;
     }
 
-    protected function download(Serie $serie, Episode $episode, array $item, string $searchQuery): bool
+    protected function download(
+        Serie $serie,
+        Episode $episode,
+        array $item,
+        string $searchQuery,
+        ?AutoDownloadDeadline $deadline = null
+    ): bool
     {
         $magnetUrl = isset($item['magnetUrl']) && is_string($item['magnetUrl']) && $item['magnetUrl'] !== ''
             ? $item['magnetUrl']
@@ -566,6 +668,10 @@ class AutoDownloadService
         if ($infoHash === null) {
             $this->logActivity($serie, $episode, $searchQuery, self::STATUS_NOTHING_FOUND, ' (Missing torrent identity)');
 
+            return false;
+        }
+
+        if ($this->deadlineReached($deadline, $serie, $episode, $searchQuery)) {
             return false;
         }
 
