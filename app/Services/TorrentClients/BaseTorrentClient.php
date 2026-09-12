@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\Services\SettingsService;
+use App\Support\AutoDownloadRuntimePolicy;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -17,10 +18,6 @@ use Illuminate\Support\Facades\Http;
  */
 abstract class BaseTorrentClient implements TorrentClientInterface
 {
-    protected const CONNECT_TIMEOUT_SECONDS = 3;
-
-    protected const REQUEST_TIMEOUT_SECONDS = 8;
-
     /** @var array Internal configuration for the client */
     protected array $config = [];
 
@@ -59,8 +56,8 @@ abstract class BaseTorrentClient implements TorrentClientInterface
      */
     protected function http(): PendingRequest
     {
-        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
-            ->timeout(self::REQUEST_TIMEOUT_SECONDS);
+        return Http::connectTimeout(AutoDownloadRuntimePolicy::CONNECT_TIMEOUT_SECONDS)
+            ->timeout(AutoDownloadRuntimePolicy::REQUEST_TIMEOUT_SECONDS);
     }
 
     protected function getConfigMappings(): array
