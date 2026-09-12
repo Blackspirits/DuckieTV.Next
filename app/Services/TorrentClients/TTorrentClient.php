@@ -62,6 +62,8 @@ class TTorrentClient extends BaseTorrentClient
             $response = $request->get($this->getBaseUrl().'/');
 
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return false;
             }
 
@@ -93,6 +95,8 @@ class TTorrentClient extends BaseTorrentClient
             $response = $request->get($this->getBaseUrl().'/torrents');
 
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -122,6 +126,8 @@ class TTorrentClient extends BaseTorrentClient
                 return null;
             }))->filter()->values()->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }

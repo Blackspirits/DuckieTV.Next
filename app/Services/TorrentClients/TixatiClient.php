@@ -90,6 +90,8 @@ class TixatiClient extends BaseTorrentClient
             $response = $request->get($this->getBaseUrl().'/transfers');
 
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -123,6 +125,8 @@ class TixatiClient extends BaseTorrentClient
                 return null;
             }))->filter()->values()->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }

@@ -276,7 +276,7 @@ class AutoDownloadServiceTest extends TestCase
             ->latest('id')
             ->firstOrFail();
 
-        $this->assertSame(' S (size parse error)', $activity->extra);
+        $this->assertSame(' MS (size parse error)', $activity->extra);
     }
 
     public function test_remote_torrent_map_uses_only_canonical_btih_keys(): void
@@ -287,8 +287,9 @@ class AutoDownloadServiceTest extends TestCase
         $transportOnlyTorrent = new \App\DTOs\TorrentData\TransmissionData(['infoHash' => 'aria2-gid-123']);
 
         $client = Mockery::mock(TorrentClientInterface::class);
-        $client->shouldReceive('isConnected')->once()->andReturn(true);
+        $client->shouldReceive('connect')->once()->andReturn(true);
         $client->shouldReceive('getTorrents')->once()->andReturn([$validTorrent, $transportOnlyTorrent]);
+        $client->shouldReceive('isConnected')->twice()->andReturn(true);
 
         $this->torrentClientMock->shouldReceive('getActiveClient')->once()->andReturn($client);
 

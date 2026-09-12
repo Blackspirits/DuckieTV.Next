@@ -49,9 +49,11 @@ class Aria2Client extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
         $result = $this->rpc('getVersion');
+        $this->connected = isset($result['version']);
 
-        return isset($result['version']);
+        return $this->connected;
     }
 
     /**
@@ -77,6 +79,8 @@ class Aria2Client extends BaseTorrentClient
             ]);
 
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -84,6 +88,8 @@ class Aria2Client extends BaseTorrentClient
             $torrents = [];
 
             if (! isset($data['result'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -99,6 +105,8 @@ class Aria2Client extends BaseTorrentClient
                 ]))->all();
 
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }

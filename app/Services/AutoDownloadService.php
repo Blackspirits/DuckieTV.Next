@@ -5,9 +5,9 @@ namespace App\Services;
 use App\Models\AutoDownloadActivity;
 use App\Models\Episode;
 use App\Models\Serie;
+use App\Services\TorrentClients\TorrentClientInterface;
 use App\Support\MagnetUri;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -33,6 +33,8 @@ class AutoDownloadService
     protected SceneNameResolverService $sceneNameResolver;
 
     protected TorrentClientService $torrentClientService;
+
+    protected ?TorrentClientInterface $activeClient = null;
 
     /** @var array<string, \App\DTOs\TorrentData\TorrentDataInterface> Internal cache of remote torrents indexed by infoHash */
     protected array $remoteTorrents = [];
@@ -67,6 +69,9 @@ class AutoDownloadService
 
     /** Series metadata is incomplete (missing TVDB ID) preventing reliable search */
     public const STATUS_TVDB_ID_MISSING = 9;
+
+    /** Search or torrent-client infrastructure failed */
+    public const STATUS_INFRASTRUCTURE_FAILURE = 10;
 
     public function __construct(
         SettingsService $settings,
@@ -142,42 +147,59 @@ class AutoDownloadService
     }
 
     /**
-     * Main check loop.
+     * Main periodic check loop.
      */
     public function check(): void
     {
-        if (! $this->isEnabled()) {
+        $torrentingEnabled = (bool) $this->settings->get('torrenting.enabled', true);
+        if ($torrentingEnabled === false || $this->isEnabled() === false) {
             return;
         }
 
-        $client = $this->torrentClientService->getActiveClient();
-        if ($client && $client->isConnected()) {
-            foreach ($client->getTorrents() as $torrent) {
-                $rawHash = method_exists($torrent, 'getInfoHash')
-                    ? $torrent->getInfoHash()
-                    : ($torrent->infoHash ?? null);
-                $infoHash = is_string($rawHash) ? MagnetUri::normalizeInfoHash($rawHash) : null;
-
-                if ($infoHash !== null) {
-                    $this->remoteTorrents[$infoHash] = $torrent;
-                }
-            }
+        $this->remoteTorrents = [];
+        $client = $this->establishUsableClient();
+        if ($client === null || $this->loadRemoteTorrents($client) === false) {
+            return;
         }
 
-        $periodDays = (int) $this->settings->get('autodownload.period', 1);
-        $from = $this->getLastRun() ?? now()->subDays($periodDays);
-        $to = now();
+        if ($client->isConnected() === false) {
+            Log::warning('AutoDownload: Torrent client connection was lost before candidate scan.');
 
-        // Get episodes that have aired since period
-        $episodes = Episode::whereBetween('firstaired', [$from->timestamp * 1000, $to->timestamp * 1000])
+            return;
+        }
+
+        $scanTo = now();
+        $periodDays = $this->periodDays();
+        $anchor = $this->getLastRun() ?? $scanTo;
+        $from = $anchor->copy()->subDays($periodDays)->startOfDay();
+
+        $episodes = Episode::whereBetween('firstaired', [$from->getTimestampMs(), $scanTo->getTimestampMs()])
             ->with('serie')
             ->get();
 
         foreach ($episodes as $episode) {
+            if ($client->isConnected() === false) {
+                Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
+
+                return;
+            }
+
             $this->processEpisode($episode);
+
+            if ($client->isConnected() === false) {
+                Log::warning('AutoDownload: Torrent client connection was lost during periodic scan.');
+
+                return;
+            }
         }
 
-        $this->settings->set('autodownload.lastrun', now()->getTimestampMs());
+        if ($client->isConnected() === false) {
+            Log::warning('AutoDownload: Torrent client connection was lost before checkpoint update.');
+
+            return;
+        }
+
+        $this->settings->set('autodownload.lastrun', $scanTo->getTimestampMs());
     }
 
     /**
@@ -185,15 +207,42 @@ class AutoDownloadService
      */
     public function manualDownload(Episode $episode): bool
     {
-        $hasBefore = ! empty($episode->magnetHash);
-        $this->processEpisode($episode, true);
+        $serie = $episode->serie;
+        if (! $serie) {
+            return false;
+        }
 
-        $episode->refresh();
+        $searchString = $this->sceneNameResolver->getSearchStringForEpisode($serie, $episode);
 
-        return ! empty($episode->magnetHash) && (! $hasBefore || $this->torrentClientService->getActiveClient()->isConnected());
+        $torrentingEnabled = (bool) $this->settings->get('torrenting.enabled', true);
+        if ($torrentingEnabled === false) {
+            $this->logActivity($serie, $episode, $searchString, self::STATUS_AUTODL_DISABLED, ' (Torrenting disabled)');
+
+            return false;
+        }
+
+        if ($episode->hasAired() === false && $episode->isLeaked() === false) {
+            $this->logActivity($serie, $episode, $searchString, self::STATUS_ON_AIR_DELAY, ' (Episode not aired or leaked)');
+
+            return false;
+        }
+
+        if (! $serie->tvdb_id) {
+            $this->logActivity($serie, $episode, $searchString, self::STATUS_TVDB_ID_MISSING);
+
+            return false;
+        }
+
+        if ($this->establishUsableClient() === null) {
+            $this->logActivity($serie, $episode, $searchString, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Torrent client unavailable)');
+
+            return false;
+        }
+
+        return $this->performSearchAndDownload($serie, $episode, $searchString);
     }
 
-    protected function processEpisode(Episode $episode, bool $force = false): void
+    protected function processEpisode(Episode $episode): void
     {
         $serie = $episode->serie;
         if (! $serie) {
@@ -202,7 +251,6 @@ class AutoDownloadService
 
         $searchString = $this->sceneNameResolver->getSearchStringForEpisode($serie, $episode);
 
-        // Parity checks from AutoDownloadService.js lines 94-113
         if ($episode->seasonnumber === 0 && ! $this->settings->get('calendar.show-specials') && ! $serie->ignoreHideSpecials) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_AUTODL_DISABLED, ' HS');
 
@@ -227,7 +275,8 @@ class AutoDownloadService
             return;
         }
 
-        if (! empty($episode->magnetHash)) {
+        $storedHash = is_string($episode->magnetHash) ? MagnetUri::normalizeInfoHash($episode->magnetHash) : null;
+        if ($storedHash !== null && array_key_exists($storedHash, $this->remoteTorrents)) {
             $this->logActivity($serie, $episode, $searchString, self::STATUS_HAS_MAGNET);
 
             return;
@@ -245,26 +294,25 @@ class AutoDownloadService
             return;
         }
 
-        // Delay logic
         $settingsDelay = (int) $this->settings->get('autodownload.delay', 15);
-        $delay = $serie->customDelay ?? $settingsDelay;
+        $delay = max(0, (int) ($serie->customDelay ?? $settingsDelay));
+        $delay = min($delay, $this->periodDays() * 24 * 60);
         $runtime = $serie->runtime ?? 60;
 
         $airedAt = Carbon::createFromTimestampMs($episode->firstaired);
         $safeToDownload = $airedAt->copy()->addMinutes($runtime + $delay);
 
-        if (! $force && $safeToDownload->isFuture()) {
+        if ($safeToDownload->isFuture()) {
             $diff = $safeToDownload->diffForHumans(['parts' => 2]);
             $this->logActivity($serie, $episode, $searchString, self::STATUS_ON_AIR_DELAY, " $diff");
 
             return;
         }
 
-        // If we got here, perform search
         $this->performSearchAndDownload($serie, $episode, $searchString);
     }
 
-    protected function performSearchAndDownload(Serie $serie, Episode $episode, string $searchString): void
+    protected function performSearchAndDownload(Serie $serie, Episode $episode, string $searchString): bool
     {
         $hasCustomSeeders = $serie->customSeeders !== null;
         $hasCustomIncludes = $serie->customIncludes !== null;
@@ -286,60 +334,150 @@ class AutoDownloadService
         }
 
         $globalSizeMin = $this->settings->get('torrenting.global_size_min', 0);
-        $globalSizeMax = $this->settings->get('torrenting.global_size_max', 10000); // effectively unlimited if null
+        $globalSizeMax = $this->settings->get('torrenting.global_size_max', 10000);
 
         $requireKeywordsModeOR = $this->settings->get('torrenting.require_keywords_mode_or', true);
         $requireKeywordsString = $requireKeywordsModeOR ? '' : $requireKeywords;
 
         $q = trim("{$searchString} {$preferredQuality} {$requireKeywordsString}");
 
-        $results = $this->searchService->search($q, $serie->searchProvider);
+        try {
+            $results = $this->searchService->search($q, $serie->searchProvider);
+        } catch (\Throwable) {
+            Log::error('AutoDownload: Torrent search failed.');
+            $this->logActivity($serie, $episode, $q, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Search failed)');
+
+            return false;
+        }
 
         if (empty($results)) {
             $this->logActivity($serie, $episode, $q, self::STATUS_NOTHING_FOUND);
 
-            return;
+            return false;
         }
 
-        // Sort by seeders descending (parity)
-        usort($results, fn ($a, $b) => ($b['seeders'] ?? 0) <=> ($a['seeders'] ?? 0));
-
-        foreach ($results as $item) {
+        $results = array_values(array_filter($results, function (array $item) use ($q): bool {
             $name = $item['releasename'] ?? ($item['title'] ?? '');
 
-            if (! $this->filterByScore($name, $q)) {
-                continue;
-            }
+            return $this->filterByScore($name, $q);
+        }));
 
-            if (! $this->filterKeywords($name, $requireKeywords, $ignoreKeywords, $requireKeywordsModeOR, $q)) {
-                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, ' K');
+        if (empty($results)) {
+            $this->logActivity($serie, $episode, $q, self::STATUS_NOTHING_FOUND);
 
-                continue;
-            }
-
-            $sizeBytes = isset($item['sizeBytes']) && is_int($item['sizeBytes']) ? $item['sizeBytes'] : null;
-            $sizeParseError = (bool) ($item['sizeParseError'] ?? false);
-            if (! $this->filterBySize($sizeBytes, $sizeParseError, $serie, $globalSizeMin, $globalSizeMax)) {
-                $extra = $sizeParseError ? ' S (size parse error)' : ' S';
-                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, $extra);
-
-                continue;
-            }
-
-            $seeders = (int) ($item['seeders'] ?? 0);
-            if ($seeders < $minSeeders) {
-                $this->logActivity($serie, $episode, $q, self::STATUS_NOT_ENOUGH_SEEDERS, " $seeders < $minSeeders");
-
-                continue;
-            }
-
-            // If we found a match!
-            $this->download($serie, $episode, $item, $q);
-
-            return;
+            return false;
         }
 
-        $this->logActivity($serie, $episode, $q, self::STATUS_NOTHING_FOUND, ' (All results filtered)');
+        if ($requireKeywords !== '') {
+            $results = array_values(array_filter($results, function (array $item) use ($requireKeywords, $requireKeywordsModeOR, $q): bool {
+                $name = $item['releasename'] ?? ($item['title'] ?? '');
+
+                return $this->filterKeywords($name, $requireKeywords, '', $requireKeywordsModeOR, $q);
+            }));
+
+            if (empty($results)) {
+                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, ' RK');
+
+                return false;
+            }
+        }
+
+        if ($ignoreKeywords !== '') {
+            $results = array_values(array_filter($results, function (array $item) use ($ignoreKeywords, $requireKeywordsModeOR, $q): bool {
+                $name = $item['releasename'] ?? ($item['title'] ?? '');
+
+                return $this->filterKeywords($name, '', $ignoreKeywords, $requireKeywordsModeOR, $q);
+            }));
+
+            if (empty($results)) {
+                $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, ' IK');
+
+                return false;
+            }
+        }
+
+        $sizeParseError = false;
+        $results = array_values(array_filter($results, function (array $item) use ($serie, $globalSizeMin, $globalSizeMax, &$sizeParseError): bool {
+            $itemSizeParseError = (bool) ($item['sizeParseError'] ?? false);
+            $sizeParseError = $sizeParseError || $itemSizeParseError;
+            $sizeBytes = isset($item['sizeBytes']) && is_int($item['sizeBytes']) ? $item['sizeBytes'] : null;
+
+            return $this->filterBySize($sizeBytes, $itemSizeParseError, $serie, $globalSizeMin, $globalSizeMax);
+        }));
+
+        if (empty($results)) {
+            $extra = $sizeParseError ? ' MS (size parse error)' : ' MS';
+            $this->logActivity($serie, $episode, $q, self::STATUS_FILTERED_OUT, $extra);
+
+            return false;
+        }
+
+        usort($results, fn (array $a, array $b): int => ($b['seeders'] ?? 0) <=> ($a['seeders'] ?? 0));
+        $item = $results[0];
+        $seeders = (int) ($item['seeders'] ?? 0);
+
+        if ($seeders < $minSeeders) {
+            $this->logActivity($serie, $episode, $q, self::STATUS_NOT_ENOUGH_SEEDERS, " $seeders < $minSeeders");
+
+            return false;
+        }
+
+        return $this->download($serie, $episode, $item, $q);
+    }
+
+    protected function periodDays(): int
+    {
+        return max(1, min(21, (int) $this->settings->get('autodownload.period', 1)));
+    }
+
+    protected function establishUsableClient(): ?TorrentClientInterface
+    {
+        $client = $this->torrentClientService->getActiveClient();
+        if ($client === null) {
+            Log::warning('AutoDownload: No configured torrent client is available.');
+
+            return null;
+        }
+
+        try {
+            if ($client->connect() === false) {
+                Log::warning('AutoDownload: Torrent client connection failed.', ['client' => $client->getName()]);
+
+                return null;
+            }
+        } catch (\Throwable) {
+            Log::error('AutoDownload: Torrent client connection failed.', ['client' => $client->getName()]);
+
+            return null;
+        }
+
+        $this->activeClient = $client;
+
+        return $client;
+    }
+
+    protected function loadRemoteTorrents(TorrentClientInterface $client): bool
+    {
+        try {
+            $torrents = $client->getTorrents();
+        } catch (\Throwable) {
+            Log::error('AutoDownload: Unable to read torrents from the active client.', ['client' => $client->getName()]);
+
+            return false;
+        }
+
+        foreach ($torrents as $torrent) {
+            $rawHash = method_exists($torrent, 'getInfoHash')
+                ? $torrent->getInfoHash()
+                : ($torrent->infoHash ?? null);
+            $infoHash = is_string($rawHash) ? MagnetUri::normalizeInfoHash($rawHash) : null;
+
+            if ($infoHash !== null) {
+                $this->remoteTorrents[$infoHash] = $torrent;
+            }
+        }
+
+        return true;
     }
 
     protected function filterByScore(string $name, string $query): bool
@@ -412,7 +550,7 @@ class AutoDownloadService
         return $sizeBytes >= $minBytes && $sizeBytes <= $maxBytes;
     }
 
-    protected function download(Serie $serie, Episode $episode, array $item, string $searchQuery): void
+    protected function download(Serie $serie, Episode $episode, array $item, string $searchQuery): bool
     {
         $magnetUrl = isset($item['magnetUrl']) && is_string($item['magnetUrl']) && $item['magnetUrl'] !== ''
             ? $item['magnetUrl']
@@ -428,28 +566,43 @@ class AutoDownloadService
         if ($infoHash === null) {
             $this->logActivity($serie, $episode, $searchQuery, self::STATUS_NOTHING_FOUND, ' (Missing torrent identity)');
 
-            return;
+            return false;
         }
 
         $label = $this->settings->get('torrenting.label') ? $serie->name : 'DuckieTV';
-        $client = $this->torrentClientService->getActiveClient();
-        $launched = false;
+        $client = $this->activeClient ?? $this->torrentClientService->getActiveClient();
+        if ($client === null || $client->isConnected() === false) {
+            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Torrent client unavailable)');
 
-        if ($client && $client->isConnected()) {
+            return false;
+        }
+
+        try {
             if ($magnetUrl !== null) {
                 $launched = $client->addMagnet($magnetUrl, $serie->dlPath, $label);
             } elseif ($torrentUrl !== null) {
-                $launched = $client->addTorrentByUrl($torrentUrl, $infoHash, $item['releasename'], $serie->dlPath, $label);
+                $releaseName = isset($item['releasename']) && is_string($item['releasename']) ? $item['releasename'] : '';
+                $launched = $client->addTorrentByUrl($torrentUrl, $infoHash, $releaseName, $serie->dlPath, $label);
+            } else {
+                $launched = false;
             }
+        } catch (\Throwable) {
+            Log::error('AutoDownload: Torrent client launch failed.', ['client' => $client->getName()]);
+            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Torrent client error)');
+
+            return false;
         }
 
-        if ($launched) {
-            $episode->magnetHash = $infoHash;
-            $episode->save();
-            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_TORRENT_LAUNCHED);
-        } else {
-            // If client is not connected or add failed, we still log it as nothing found/filtered due to connection
-            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_NOTHING_FOUND, ' (Torrent client error)');
+        if ($launched === false) {
+            $this->logActivity($serie, $episode, $searchQuery, self::STATUS_INFRASTRUCTURE_FAILURE, ' (Torrent client rejected launch)');
+
+            return false;
         }
+
+        $episode->magnetHash = $infoHash;
+        $episode->save();
+        $this->logActivity($serie, $episode, $searchQuery, self::STATUS_TORRENT_LAUNCHED);
+
+        return true;
     }
 }
