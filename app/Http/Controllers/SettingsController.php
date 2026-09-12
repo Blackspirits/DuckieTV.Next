@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Settings\ShowSettingsRequest;
+use App\Services\AutoDownloadLifecycleService;
 use App\Services\TorrentClientService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
@@ -16,14 +17,18 @@ class SettingsController extends Controller
 
     protected $backupService;
 
+    protected AutoDownloadLifecycleService $autoDownloadLifecycle;
+
     public function __construct(
         TranslationService $translationService,
         TorrentClientService $torrentClientService,
-        \App\Services\BackupService $backupService
+        \App\Services\BackupService $backupService,
+        AutoDownloadLifecycleService $autoDownloadLifecycle
     ) {
         $this->translationService = $translationService;
         $this->torrentClientService = $torrentClientService;
         $this->backupService = $backupService;
+        $this->autoDownloadLifecycle = $autoDownloadLifecycle;
     }
 
     /**
@@ -96,6 +101,9 @@ class SettingsController extends Controller
             abort(404);
         }
 
+        $wasAutoDownloadEligible = (bool) settings()->get('torrenting.enabled', true)
+            && (bool) settings()->get('torrenting.autodownload', false);
+
         // Expand dot-notated keys (e.g. "torrenting.client") into nested arrays
         // because Laravel validation expects nesting for dot-notation rules.
         $data = $request->all(); // Works for JSON and form data
@@ -153,6 +161,13 @@ class SettingsController extends Controller
             settings($key, $value);
         }
 
+        $isAutoDownloadEligible = (bool) settings()->get('torrenting.enabled', true)
+            && (bool) settings()->get('torrenting.autodownload', false);
+
+        if (! $wasAutoDownloadEligible && $isAutoDownloadEligible) {
+            $this->autoDownloadLifecycle->dispatchIfEligible();
+        }
+
         $res = ['success' => true, 'message' => 'Settings saved successfully.'];
 
         if ($request->has('test') && $section === 'torrent') {
@@ -165,10 +180,16 @@ class SettingsController extends Controller
                     $res['connection_success'] = $connected;
                     if ($connected) {
                         $res['message'] = "Connected to {$client->getName()} successfully!";
+                        $triggered = $this->autoDownloadLifecycle->recordClientConnectivity($client->getId(), true);
+                        if (! $triggered) {
+                            $this->autoDownloadLifecycle->dispatchIfEligible();
+                        }
                     } else {
+                        $this->autoDownloadLifecycle->recordClientConnectivity($client->getId(), false);
                         $res['connection_error'] = "Failed to connect to {$client->getName()} for unknown reasons. Check your settings and server status.";
                     }
                 } catch (\Exception $e) {
+                    $this->autoDownloadLifecycle->recordClientConnectivity($client->getId(), false);
                     $res['connection_success'] = false;
                     $res['connection_error'] = "Connection to {$client->getName()} failed: ".$e->getMessage();
                 }

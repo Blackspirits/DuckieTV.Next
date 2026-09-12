@@ -51,7 +51,9 @@ Route::prefix('torrents')->group(function () {
     Route::post('/details', [\App\Http\Controllers\TorrentController::class, 'details'])->name('torrents.details');
     Route::get('/engines', [\App\Http\Controllers\TorrentController::class, 'engines'])->name('torrents.engines');
     Route::post('/add', [\App\Http\Controllers\TorrentController::class, 'add'])->name('torrents.add');
-    Route::get('/status', [\App\Http\Controllers\TorrentController::class, 'status'])->name('torrents.status');
+    Route::get('/status', [\App\Http\Controllers\TorrentController::class, 'status'])
+        ->middleware(\App\Http\Middleware\RecordTorrentClientConnectivity::class)
+        ->name('torrents.status');
     Route::get('/', [\App\Http\Controllers\TorrentController::class, 'index'])->name('torrents.index');
     Route::get('/{infoHash}', [\App\Http\Controllers\TorrentController::class, 'show'])->name('torrents.show');
     Route::post('/{infoHash}/start', [\App\Http\Controllers\TorrentController::class, 'start'])->name('torrents.start');

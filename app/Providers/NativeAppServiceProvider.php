@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\AutoDownloadLifecycleService;
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\Windows\WindowMinimized;
@@ -17,7 +18,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
-        // Reverb startup removed as per user request (switching to polling)
+        app(AutoDownloadLifecycleService::class)->dispatchStartupMaintenance();
 
         Window::open()
             ->titleBarHidden()
@@ -50,7 +51,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(WindowMinimized::class, function (WindowMinimized $event) {
             Window::close($event->id);
         });
-
     }
 
     /**
@@ -58,7 +58,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function phpIni(): array
     {
-        return [
-        ];
+        return [];
     }
 }

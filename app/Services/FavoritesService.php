@@ -441,6 +441,7 @@ class FavoritesService
         return $unique->unique()->sort()->values()->all();
     }
 
+    /** @psalm-suppress PossiblyUnusedMethod Retained public service API after AutoDownloadJob consolidation. */
     public function getEpisodesForDateRange(int $start, int $end): \Illuminate\Database\Eloquent\Collection
     {
         return Episode::where('firstaired', '>=', $start)
