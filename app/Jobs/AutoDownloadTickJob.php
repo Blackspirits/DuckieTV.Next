@@ -19,7 +19,6 @@ class AutoDownloadTickJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public function __construct()
     {
-        $this->onConnection('autodownload');
         $this->onQueue('autodownload');
     }
 
