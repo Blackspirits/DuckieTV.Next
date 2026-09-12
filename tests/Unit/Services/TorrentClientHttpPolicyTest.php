@@ -28,3 +28,21 @@ it('routes torrent client HTTP calls through the bounded base request policy', f
         expect($source, $driver)->not->toContain('Http::');
     }
 });
+
+it('routes periodic torrent search HTTP calls through an equally bounded policy', function () {
+    $root = dirname(__DIR__, 3);
+    $generic = file_get_contents($root.'/app/Services/TorrentSearchEngines/GenericSearchEngine.php');
+    $showRss = file_get_contents($root.'/app/Services/TorrentSearchEngines/ShowRSSEngine.php');
+
+    expect($generic)
+        ->toContain('CONNECT_TIMEOUT_SECONDS = 3')
+        ->toContain('REQUEST_TIMEOUT_SECONDS = 8')
+        ->toContain('Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)')
+        ->toContain('->timeout(self::REQUEST_TIMEOUT_SECONDS)')
+        ->toContain('$this->boundedHttp()->withHeaders(');
+
+    expect($showRss)
+        ->toContain('$this->boundedHttp()->get(')
+        ->and(substr_count($showRss, '$this->boundedHttp()->get('))->toBe(2)
+        ->and($showRss)->not->toContain('Http::');
+});
