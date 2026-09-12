@@ -21,7 +21,6 @@ class AutoDownloadJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct()
     {
-        $this->onConnection('autodownload');
         $this->onQueue('autodownload');
     }
 
