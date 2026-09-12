@@ -93,7 +93,7 @@ class TransmissionClient extends BaseTorrentClient
             'infoHash' => strtoupper($torrent['hashString']),
             'name' => $torrent['name'],
             'progress' => (float) $torrent['percentDone'] * 100,
-            'status' => $this->getTransmissionStatus($torrent['status']),
+            'status' => (int) $torrent['status'],
             'isStarted' => $torrent['status'] > 0,
             'downloadSpeed' => $torrent['rateDownload'],
         ]))->all();
@@ -159,20 +159,6 @@ class TransmissionClient extends BaseTorrentClient
         $response = $this->rpc('torrent-add', $args);
 
         return isset($response['result']) && $response['result'] === 'success';
-    }
-
-    protected function getTransmissionStatus(int $status): string
-    {
-        return match ($status) {
-            0 => 'Stopped',
-            1 => 'Check Wait',
-            2 => 'Check',
-            3 => 'Download Wait',
-            4 => 'Downloading',
-            5 => 'Seed Wait',
-            6 => 'Seeding',
-            default => 'Unknown',
-        };
     }
 
     /**
