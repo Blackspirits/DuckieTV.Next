@@ -53,9 +53,7 @@ abstract class BaseTorrentClient implements TorrentClientInterface
     }
 
     /**
-     * Define mappings between internal config keys and DuckieTV settings keys.
-     *
-     * @return array<string, string>
+     * Build a bounded HTTP request for torrent-client API calls.
      */
     protected function http(): PendingRequest
     {
@@ -63,6 +61,11 @@ abstract class BaseTorrentClient implements TorrentClientInterface
             ->timeout(self::REQUEST_TIMEOUT_SECONDS);
     }
 
+    /**
+     * Define mappings between internal config keys and DuckieTV settings keys.
+     *
+     * @return array<string, string>
+     */
     protected function getConfigMappings(): array
     {
         return [];
