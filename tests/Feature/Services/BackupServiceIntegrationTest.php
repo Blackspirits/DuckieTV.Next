@@ -5,12 +5,14 @@ namespace Tests\Feature\Services;
 use App\Services\BackupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
  * Integration test that hits the real Trakt API.
  * Skipped in CI environments.
  */
+#[Group('integration')]
 class BackupServiceIntegrationTest extends TestCase
 {
     use RefreshDatabase;

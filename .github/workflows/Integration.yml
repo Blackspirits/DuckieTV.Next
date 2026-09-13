@@ -1,0 +1,50 @@
+name: Live Integration Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    continue-on-error: true
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Copy test environment
+        run: cp .env.example .env.testing
+
+      - name: Generate key
+        run: php artisan key:generate --env=testing
+
+      - name: Run live integration smoke tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+        run: ./vendor/bin/phpunit --all --group integration
