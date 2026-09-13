@@ -48,7 +48,7 @@ jobs:
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Install Dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
 
       - name: Psalm Security Scan
         run: ./vendor/bin/psalm --report=results.sarif

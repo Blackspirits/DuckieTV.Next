@@ -42,7 +42,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          composer install --prefer-dist --no-progress --no-suggest
+          composer install --prefer-dist --no-progress
 
       # Run Larastan and output to a .sarif file
       - name: Run Larastan Analysis
