@@ -174,6 +174,38 @@ it('removes a favorite with cascading delete', function () {
         ->and(Episode::count())->toBe(0);
 });
 
+it('rolls back the entire favorite graph when episode processing fails', function () {
+    $data = makeTraktShowData();
+    $serie = $this->favorites->addFavorite($data);
+
+    $season = Season::where('serie_id', $serie->id)->firstOrFail();
+    $pilot = Episode::where('trakt_id', 62085)->firstOrFail();
+
+    $data['overview'] = 'This overview must roll back.';
+    $data['seasons'][0]['overview'] = 'This season overview must roll back.';
+    $data['seasons'][0]['episodes'][0]['title'] = 'Changed Pilot';
+    $data['seasons'][0]['episodes'] = [$data['seasons'][0]['episodes'][0]];
+
+    expect(fn () => $this->favorites->addFavorite(
+        $data,
+        [],
+        true,
+        function (): void {
+            throw new RuntimeException('Synthetic episode processing failure');
+        }
+    ))->toThrow(RuntimeException::class, 'Synthetic episode processing failure');
+
+    $serie->refresh();
+    $season->refresh();
+    $pilot->refresh();
+
+    expect($serie->overview)->toBe('A chemistry teacher turned meth maker.')
+        ->and($season->overview)->toBe('Season 1')
+        ->and($pilot->episodename)->toBe('Pilot')
+        ->and(Episode::where('serie_id', $serie->id)->count())->toBe(2)
+        ->and(Episode::where('trakt_id', 62086)->exists())->toBeTrue();
+});
+
 it('cleans up orphaned episodes on update', function () {
     $data = makeTraktShowData();
     $serie = $this->favorites->addFavorite($data);
