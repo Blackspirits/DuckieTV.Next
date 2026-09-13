@@ -40,7 +40,7 @@ class SceneNameResolverService
         $source = preg_replace('/\(([12][09][0-9]{2})\)/', '', $source);
 
         // replace /[^0-9a-zA-Z- ]/g with ''
-        return preg_replace('/[^0-9a-zA-Z- ]/', '', $source);
+        return preg_replace('/[^0-9a-zA-Z- ]/', '', $source) ?? '';
     }
 
     /**
@@ -49,7 +49,7 @@ class SceneNameResolverService
      */
     public function getSearchStringForEpisode(Serie $serie, Episode $episode): string
     {
-        $append = (! empty($serie->custom_search_string)) ? ' '.$serie->custom_search_string : '';
+        $append = (! empty($serie->customSearchString)) ? ' '.$serie->customSearchString : '';
         $traktID = (int) $serie->trakt_id;
 
         // Note: In original, exceptions are loaded from remote JSON.
