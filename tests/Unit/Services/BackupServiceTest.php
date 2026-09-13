@@ -23,6 +23,10 @@ class BackupServiceTest extends TestCase
         $backupData = [[], ['watched' => 1]];
 
         // Trakt Expectation
+        $trakt->shouldReceive('withThrottling')
+            ->once()
+            ->with(Mockery::type('callable'))
+            ->andReturnUsing(fn (callable $callback) => $callback());
         $trakt->shouldReceive('serie')->with('123')->andReturn(['title' => 'Show A', 'trakt_id' => 123]);
 
         // Favorites Expectation - The callback is internal, so we just expect the method call
