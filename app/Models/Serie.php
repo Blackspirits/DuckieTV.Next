@@ -164,7 +164,10 @@ class Serie extends Model
     {
         return $this->episodes()
             ->where('watched', 1)
-            ->where('watched', 1)
+            ->whereNotNull('firstaired')
+            ->where('firstaired', '>', 0)
+            ->where('firstaired', '<=', now()->getTimestampMs())
+            ->where('seasonnumber', '>', 0)
             ->count() * ($this->runtime ?? 0);
     }
 
@@ -182,7 +185,7 @@ class Serie extends Model
     {
         $total = $this->getTotalRunTime();
 
-        return $total > 0 ? round(($this->getTotalWatchedTime() / $total) * 100) : 0;
+        return $total > 0 ? (int) round(($this->getTotalWatchedTime() / $total) * 100) : 0;
     }
 
     /**

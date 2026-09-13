@@ -49,7 +49,7 @@ class SceneNameResolverService
      */
     public function getSearchStringForEpisode(Serie $serie, Episode $episode): string
     {
-        $append = (! empty($serie->custom_search_string)) ? ' '.$serie->custom_search_string : '';
+        $append = (! empty($serie->customSearchString)) ? ' '.$serie->customSearchString : '';
         $traktID = (int) $serie->trakt_id;
 
         // Note: In original, exceptions are loaded from remote JSON.

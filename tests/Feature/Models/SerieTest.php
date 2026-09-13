@@ -132,6 +132,54 @@ it('marks all episodes as watched', function () {
         ->and($ep2->isWatched())->toBeFalse();
 });
 
+it('counts watched runtime only for aired non-special episodes', function () {
+    $serie = Serie::create([
+        'name' => 'Runtime Contract',
+        'trakt_id' => 450,
+        'runtime' => 60,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 1,
+        'firstaired' => now()->subDays(2)->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4501,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 2,
+        'firstaired' => now()->subDay()->getTimestampMs(),
+        'watched' => 0,
+        'trakt_id' => 4502,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 3,
+        'firstaired' => now()->addDay()->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4503,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 0,
+        'episodenumber' => 1,
+        'firstaired' => now()->subDay()->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4504,
+    ]);
+
+    expect($serie->getTotalRunTime())->toBe(120)
+        ->and($serie->getTotalWatchedTime())->toBe(60)
+        ->and($serie->getWatchedPercentage())->toBe(50);
+});
+
 it('gets next and last episode', function () {
     $serie = Serie::create(['name' => 'Test', 'trakt_id' => 500]);
     $season = Season::create(['serie_id' => $serie->id, 'seasonnumber' => 1]);
