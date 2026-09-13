@@ -33,7 +33,9 @@ class RestoreShowJob implements ShouldQueue
     public function __construct(
         protected string $seriesId,
         protected array $backupData
-    ) {}
+    ) {
+        $this->onConnection('database_long');
+    }
 
     /**
      * Execute the job.

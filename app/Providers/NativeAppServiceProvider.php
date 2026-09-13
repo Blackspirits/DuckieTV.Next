@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\LongQueueWorkerService;
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\Windows\WindowMinimized;
@@ -18,6 +19,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
+        app(LongQueueWorkerService::class)->start();
         app(AutoDownloadLifecycleService::class)->dispatchStartupMaintenance();
 
         Window::open()

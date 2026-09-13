@@ -198,24 +198,30 @@ class FixDatabaseCommand extends Command
                 return;
             }
 
-            // Match Laravel's database queue reservation expiry rule. A fresh
-            // reservation may still belong to a live worker and must never be
-            // released by this recovery command.
-            $retryAfter = max(1, (int) config('queue.connections.database.retry_after', 90));
-            $staleBefore = time() - $retryAfter;
+            // Queue connections have different retry windows. AutoDL must
+            // recover quickly, while default work can legitimately run for an
+            // hour. Classify each reservation using the retry_after value of
+            // the worker responsible for that queue.
+            $reservedRows = $pdo->query(
+                'SELECT id, queue, reserved_at FROM jobs WHERE reserved_at IS NOT NULL'
+            )->fetchAll(\PDO::FETCH_ASSOC);
 
-            $staleStatement = $pdo->prepare(
-                'SELECT COUNT(*) FROM jobs WHERE reserved_at IS NOT NULL AND reserved_at <= :stale_before'
-            );
-            $staleStatement->execute(['stale_before' => $staleBefore]);
-            $staleCount = (int) $staleStatement->fetchColumn();
+            $now = time();
+            $staleRows = [];
+            $activeCount = 0;
 
-            $activeStatement = $pdo->prepare(
-                'SELECT COUNT(*) FROM jobs WHERE reserved_at IS NOT NULL AND reserved_at > :stale_before'
-            );
-            $activeStatement->execute(['stale_before' => $staleBefore]);
-            $activeCount = (int) $activeStatement->fetchColumn();
+            foreach ($reservedRows as $row) {
+                $retryAfter = $this->retryAfterForQueue((string) $row['queue']);
+                $reservedAt = (int) $row['reserved_at'];
 
+                if ($reservedAt <= ($now - $retryAfter)) {
+                    $staleRows[] = $row;
+                } else {
+                    $activeCount++;
+                }
+            }
+
+            $staleCount = count($staleRows);
             $pendingCount = (int) $pdo->query('SELECT COUNT(*) FROM jobs WHERE reserved_at IS NULL')->fetchColumn();
             $failedCount = 0;
 
@@ -225,25 +231,29 @@ class FixDatabaseCommand extends Command
             }
 
             $this->components->twoColumnDetail('  Active reserved jobs', (string) $activeCount);
-            $this->components->twoColumnDetail(
-                "  Expired reservations (>{$retryAfter}s)",
-                (string) $staleCount
-            );
+            $this->components->twoColumnDetail('  Expired reservations', (string) $staleCount);
             $this->components->twoColumnDetail('  Pending jobs', (string) $pendingCount);
             $this->components->twoColumnDetail('  Failed jobs', (string) $failedCount);
 
-            // Release only reservations Laravel itself considers expired.
-            // Preserve attempts: resetting it would grant already-attempted work
-            // a fresh retry budget and break queue max-attempt semantics.
+            // Release with a compare-and-swap on reserved_at so a row that was
+            // re-reserved after classification cannot be stolen from a live worker.
+            $releasedCount = 0;
             if ($staleCount > 0) {
                 $releaseStatement = $pdo->prepare(
-                    'UPDATE jobs SET reserved_at = NULL WHERE reserved_at IS NOT NULL AND reserved_at <= :stale_before'
+                    'UPDATE jobs SET reserved_at = NULL WHERE id = :id AND reserved_at = :reserved_at'
                 );
-                $releaseStatement->execute(['stale_before' => $staleBefore]);
+
+                foreach ($staleRows as $row) {
+                    $releaseStatement->execute([
+                        'id' => (int) $row['id'],
+                        'reserved_at' => (int) $row['reserved_at'],
+                    ]);
+                    $releasedCount += $releaseStatement->rowCount();
+                }
 
                 $this->components->twoColumnDetail(
                     '  Released expired reservations',
-                    "<fg=green>{$staleCount} released ✓</>"
+                    "<fg=green>{$releasedCount} released ✓</>"
                 );
             }
 
@@ -281,6 +291,18 @@ class FixDatabaseCommand extends Command
         } catch (\PDOException $e) {
             $this->components->error("  Failed to check jobs: {$e->getMessage()}");
         }
+    }
+
+    /**
+     * Return the reservation window used by the worker responsible for a queue.
+     * Unknown queues use the longer window to avoid stealing legitimate work.
+     */
+    private function retryAfterForQueue(string $queue): int
+    {
+        $short = max(1, (int) config('queue.connections.database.retry_after', 90));
+        $long = max(1, (int) config('queue.connections.database_long.retry_after', 3660));
+
+        return $queue === 'autodownload' ? $short : $long;
     }
 
     /**

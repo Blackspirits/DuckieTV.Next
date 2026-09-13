@@ -38,7 +38,8 @@ class RestoreBackupJobTest extends TestCase
         // Assert Batch Dispatched
         \Illuminate\Support\Facades\Bus::assertBatched(function (\Illuminate\Bus\PendingBatch $batch) {
             return $batch->jobs->count() === 2 &&
-                   $batch->name == 'Restoring Backup (2 shows)';
+                   $batch->name == 'Restoring Backup (2 shows)' &&
+                   $batch->connection() === 'database_long';
         });
     }
 }

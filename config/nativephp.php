@@ -156,19 +156,13 @@ return [
     ],
 
     /**
-     * The queue workers that get auto-started on your application start.
-     *
-     * IMPORTANT: timeout must be >= the longest job's $timeout property.
-     * RestoreShowJob has $timeout = 180, TraktUpdateJob has $timeout = 3600.
-     * We set this to 300 as a reasonable compromise for the queue worker.
-     * Jobs with longer timeouts (TraktUpdateJob) should handle their own
-     * time management internally.
+     * NativePHP's built-in worker cannot choose a Laravel queue connection,
+     * so it is dedicated to the short-recovery AutoDL queue. Default work is
+     * consumed by LongQueueWorkerService through the database_long connection.
      */
     'queue_workers' => [
-        'default' => [
-            // AutoDL gets its own persistent queue identity for crash recovery,
-            // but is consumed by the same NativePHP worker before default work.
-            'queues' => ['autodownload', 'default'],
+        'autodownload' => [
+            'queues' => ['autodownload'],
             'memory_limit' => 128,
             'timeout' => 300,
             'sleep' => 3,

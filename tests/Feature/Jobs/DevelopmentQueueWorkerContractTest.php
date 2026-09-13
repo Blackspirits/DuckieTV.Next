@@ -1,6 +1,6 @@
 <?php
 
-it('listens to autodownload before default in composer development mode', function () {
+it('uses separate short and long queue connections in composer development mode', function () {
     $composer = json_decode(
         file_get_contents(base_path('composer.json')),
         true,
@@ -12,8 +12,8 @@ it('listens to autodownload before default in composer development mode', functi
     $command = implode("\n", is_array($commands) ? $commands : [$commands]);
 
     expect($command)
-        ->toContain('queue:listen')
-        ->toContain('--queue=autodownload,default')
+        ->toContain('queue:listen database --queue=autodownload')
+        ->toContain('queue:listen database_long --queue=default')
         ->toContain('--tries=1')
         ->toContain('--timeout=0');
 });

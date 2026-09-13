@@ -22,7 +22,9 @@ class RestoreBackupJob implements ShouldQueue
      */
     public function __construct(
         protected array $backupData
-    ) {}
+    ) {
+        $this->onConnection('database_long');
+    }
 
     /**
      * Execute the job.
@@ -71,6 +73,7 @@ class RestoreBackupJob implements ShouldQueue
 
             // 3. Dispatch Batch
             $batch = \Illuminate\Support\Facades\Bus::batch($jobs)
+                ->onConnection('database_long')
                 ->then(function (\Illuminate\Bus\Batch $batch) {
                     // All jobs completed successfully
                     $data = Cache::get('backup_progress', ['logs' => []]);

@@ -44,6 +44,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Long-running restore / metadata work shares the same jobs table but
+        // must not become reservable again while a legitimate 3600s job runs.
+        'database_long' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'default',
+            'retry_after' => (int) env('DB_LONG_QUEUE_RETRY_AFTER', 3660),
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

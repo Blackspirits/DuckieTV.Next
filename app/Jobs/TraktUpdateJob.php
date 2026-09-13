@@ -54,6 +54,11 @@ class TraktUpdateJob implements ShouldQueue
      */
     public int $timeout = 3600;
 
+    public function __construct()
+    {
+        $this->onConnection('database_long');
+    }
+
     /**
      * Execute the job: update favorite shows and refresh trending cache.
      *

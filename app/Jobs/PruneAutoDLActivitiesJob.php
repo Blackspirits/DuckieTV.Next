@@ -18,7 +18,7 @@ class PruneAutoDLActivitiesJob implements ShouldQueue
      */
     public function __construct()
     {
-        //
+        $this->onConnection('database_long');
     }
 
     /**

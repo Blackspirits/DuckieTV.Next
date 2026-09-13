@@ -28,6 +28,7 @@ class FixDatabaseCommandTest extends TestCase
                 'foreign_key_constraints' => true,
             ],
             'queue.connections.database.retry_after' => 90,
+            'queue.connections.database_long.retry_after' => 3660,
         ]);
 
         $pdo = new PDO('sqlite:'.$this->databasePath);
@@ -65,7 +66,7 @@ class FixDatabaseCommandTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_releases_only_expired_reservations_and_preserves_attempts(): void
+    public function test_it_uses_queue_specific_expiry_and_preserves_attempts(): void
     {
         $pdo = new PDO('sqlite:'.$this->databasePath);
         $now = time();
@@ -79,11 +80,11 @@ class FixDatabaseCommandTest extends TestCase
             'queue' => 'default',
             'payload' => '{}',
             'attempts' => 2,
-            'reserved_at' => $now - 5,
-            'available_at' => $now - 5,
-            'created_at' => $now - 60,
+            'reserved_at' => $now - 120,
+            'available_at' => $now - 120,
+            'created_at' => $now - 180,
         ]);
-        $freshId = (int) $pdo->lastInsertId();
+        $activeLongId = (int) $pdo->lastInsertId();
 
         $insert->execute([
             'queue' => 'autodownload',
@@ -93,7 +94,17 @@ class FixDatabaseCommandTest extends TestCase
             'available_at' => $now - 120,
             'created_at' => $now - 180,
         ]);
-        $staleId = (int) $pdo->lastInsertId();
+        $staleAutoDlId = (int) $pdo->lastInsertId();
+
+        $insert->execute([
+            'queue' => 'default',
+            'payload' => '{}',
+            'attempts' => 3,
+            'reserved_at' => $now - 4000,
+            'available_at' => $now - 4000,
+            'created_at' => $now - 4100,
+        ]);
+        $staleLongId = (int) $pdo->lastInsertId();
 
         $insert->execute([
             'queue' => 'default',
@@ -115,11 +126,14 @@ class FixDatabaseCommandTest extends TestCase
             $byId[(int) $row['id']] = $row;
         }
 
-        $this->assertNotNull($byId[$freshId]['reserved_at']);
-        $this->assertSame(2, (int) $byId[$freshId]['attempts']);
+        $this->assertNotNull($byId[$activeLongId]['reserved_at']);
+        $this->assertSame(2, (int) $byId[$activeLongId]['attempts']);
 
-        $this->assertNull($byId[$staleId]['reserved_at']);
-        $this->assertSame(1, (int) $byId[$staleId]['attempts']);
+        $this->assertNull($byId[$staleAutoDlId]['reserved_at']);
+        $this->assertSame(1, (int) $byId[$staleAutoDlId]['attempts']);
+
+        $this->assertNull($byId[$staleLongId]['reserved_at']);
+        $this->assertSame(3, (int) $byId[$staleLongId]['attempts']);
 
         $this->assertNull($byId[$pendingId]['reserved_at']);
         $this->assertSame(0, (int) $byId[$pendingId]['attempts']);
