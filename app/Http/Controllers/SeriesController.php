@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\RateLimitException;
 use App\Services\FavoritesService;
 use App\Services\SceneNameResolverService;
+use App\Services\TraktService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class SeriesController extends Controller
 {
@@ -12,10 +15,16 @@ class SeriesController extends Controller
 
     protected SceneNameResolverService $sceneNameResolver;
 
-    public function __construct(FavoritesService $favorites, SceneNameResolverService $sceneNameResolver)
-    {
+    protected TraktService $trakt;
+
+    public function __construct(
+        FavoritesService $favorites,
+        SceneNameResolverService $sceneNameResolver,
+        TraktService $trakt
+    ) {
         $this->favorites = $favorites;
         $this->sceneNameResolver = $sceneNameResolver;
+        $this->trakt = $trakt;
     }
 
     /**
@@ -205,7 +214,10 @@ class SeriesController extends Controller
     }
 
     /**
-     * Refresh series details from external source (Stub).
+     * Refresh a favorite from Trakt and persist the full current series data.
+     *
+     * Mirrors the historical FavoritesManager.refresh flow while preserving
+     * local-only series settings through FavoritesService's existing update path.
      */
     public function refresh(int $id)
     {
@@ -215,11 +227,35 @@ class SeriesController extends Controller
             return abort(404, 'Show not found');
         }
 
-        // TODO: Implement actual refresh logic via TMDB/TVDB/Trakt services
-        // For now, just touch the updated_at timestamp
-        $serie->touch();
+        if (! $serie->trakt_id) {
+            return redirect()->back()->with('error', "Cannot refresh {$serie->name}: missing Trakt ID.");
+        }
 
-        return redirect()->back()->with('status', "Refreshed {$serie->name}.");
+        try {
+            $data = $this->trakt->serie((string) $serie->trakt_id);
+            $updated = $this->favorites->addFavorite($data, [], true);
+
+            return redirect()->back()->with('status', "Refreshed {$updated->name}.");
+        } catch (RateLimitException $e) {
+            Log::info('Series refresh deferred by Trakt rate limit.', [
+                'serie_id' => $serie->id,
+                'trakt_id' => $serie->trakt_id,
+                'retry_after' => $e->retryAfter,
+            ]);
+
+            return redirect()->back()->with(
+                'error',
+                "Trakt is temporarily unavailable. Try again in {$e->retryAfter} seconds."
+            );
+        } catch (\Throwable $e) {
+            Log::error('Series refresh failed.', [
+                'serie_id' => $serie->id,
+                'trakt_id' => $serie->trakt_id,
+                'exception' => $e::class,
+            ]);
+
+            return redirect()->back()->with('error', "Failed to refresh {$serie->name}.");
+        }
     }
 
     /**
