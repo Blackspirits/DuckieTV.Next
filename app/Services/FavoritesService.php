@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Episode;
 use App\Models\Season;
 use App\Models\Serie;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -83,13 +84,16 @@ class FavoritesService
             $serie->poster = $images['poster'] ?? null;
         }
 
-        $serie->save();
+        return DB::transaction(function () use ($serie, $data, $watched, $onProgress): Serie {
+            $serie->save();
 
-        $this->cleanupEpisodes($data['seasons'] ?? [], $serie);
-        $seasonCache = $this->updateSeasons($serie, $data['seasons'] ?? []);
-        $this->updateEpisodes($serie, $data['seasons'] ?? [], $watched, $seasonCache, $onProgress);
+            $this->cleanupEpisodes($data['seasons'] ?? [], $serie);
+            $seasonCache = $this->updateSeasons($serie, $data['seasons'] ?? []);
+            $this->updateEpisodes($serie, $data['seasons'] ?? [], $watched, $seasonCache, $onProgress);
 
-        return $serie->fresh();
+            return $serie->fresh()
+                ?? throw new \RuntimeException('Favorite disappeared during transactional update.');
+        });
     }
 
     /**
