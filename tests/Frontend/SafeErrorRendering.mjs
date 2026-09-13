@@ -121,12 +121,42 @@ function makeContext(document) {
     assert.equal(context.__executed, undefined);
 }
 
-// BackupRestore: failure time/id/error fields must remain literal text.
+// TorrentSearch: the user query in the result title must remain literal text.
+{
+    const header = new FakeElement();
+    const rootEl = new FakeElement();
+    rootEl.query = selector => selector === '#torrent-dialog-header' ? header : null;
+    const document = {
+        createElement: () => new FakeElement(),
+        createTextNode: text => new FakeTextNode(text),
+    };
+    const context = makeContext(document);
+    vm.runInContext(`${source('public/js/TorrentSearch.js')}\nglobalThis.__TorrentSearch = TorrentSearch;`, context);
+    const search = Object.create(context.__TorrentSearch.prototype);
+    search.el = rootEl;
+    search.titleTemplate = 'Found :itemslength results';
+    search.results = [{}];
+    search.searchInput = { value: payload };
+    search.updateTitle();
+    assert.equal(header.textContent, `Found 1 results (${payload})`);
+    assert.equal(context.__executed, undefined);
+}
+
+// BackupRestore: failure fields and show metadata must remain literal text.
 {
     const failuresContainer = new FakeElement();
     const failuresList = new FakeElement();
+    const showTitle = new FakeElement();
+    const showBar = new FakeElement();
+    const showProgress = new FakeElement();
+    showProgress.query = selector => {
+        if (selector === '.restore-show-text') return showTitle;
+        if (selector === '.show-progress-bar') return showBar;
+        return null;
+    };
     const modalRoot = new FakeElement();
     modalRoot.query = selector => {
+        if (selector === '.restore-show-progress') return showProgress;
         if (selector === '.restore-failures-container') return failuresContainer;
         if (selector === '.restore-failed-items') return failuresList;
         return null;
@@ -144,7 +174,14 @@ function makeContext(document) {
     backup.posters = [];
     backup.failedSeries = [{ time: payload, id: payload, error: payload }];
     backup.lastFailedCount = 0;
-    backup.updateDetailedUI({ status: 'running', percent: 10 });
+    backup.updateDetailedUI({
+        status: 'running',
+        type: 'show_progress',
+        percent: 10,
+        show: payload,
+        season: payload,
+    });
+    assert.equal(showTitle.textContent, `Restoring: ${payload} (Season ${payload})`);
     assert.equal(failuresList.children.length, 1);
     assert.equal(failuresList.children[0].textContent, `${payload}: ${payload} - ${payload}`);
     assert.equal(context.__executed, undefined);

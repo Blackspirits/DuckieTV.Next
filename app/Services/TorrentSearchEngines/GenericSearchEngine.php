@@ -228,6 +228,83 @@ class GenericSearchEngine implements SearchEngineInterface
     }
 
     /**
+     * Accept only actual magnet URIs carrying a canonicalizable BTIH.
+     */
+    protected function normalizeMagnetUrl(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+
+        $url = trim($url);
+        if ($url === '' || ! str_starts_with(strtolower($url), 'magnet:?')) {
+            return null;
+        }
+
+        return MagnetUri::extractInfoHash($url) !== null ? $url : null;
+    }
+
+    /**
+     * Resolve an extracted link against the configured mirror and allow only
+     * public HTTP(S) destinations without embedded credentials.
+     */
+    protected function resolveHttpUrl(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+
+        $url = trim($url);
+        $mirror = trim((string) ($this->config['mirror'] ?? ''));
+
+        if ($url === '' || $mirror === '' || preg_match('/[\\x00-\\x1F\\x7F]/', $url) === 1) {
+            return null;
+        }
+
+        try {
+            $resolved = (string) UriResolver::resolve(new Uri($mirror), new Uri($url));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $parts = parse_url($resolved);
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower($parts['scheme']);
+        $host = $this->normalizeHost($parts['host']);
+
+        if (! in_array($scheme, ['http', 'https'], true)
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || $this->isBlockedHost($host)) {
+            return null;
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Resolve a details link and keep it on the exact configured mirror origin.
+     */
+    protected function resolveTrustedDetailUrl(?string $url): ?string
+    {
+        $resolved = $this->resolveHttpUrl($url);
+        if ($resolved === null) {
+            return null;
+        }
+
+        try {
+            $this->assertTrustedDetailsUrl($resolved);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        return $resolved;
+    }
+
+    /**
      * Get the current engine configuration.
      */
     public function getConfig(): array
@@ -288,6 +365,10 @@ class GenericSearchEngine implements SearchEngineInterface
             $rawSize = $this->getPropertyForSelector($node, $selectors['size']);
             $parsedSize = TorrentSize::parse($rawSize);
 
+            $detailUrl = $this->resolveTrustedDetailUrl(
+                $this->getPropertyForSelector($node, $selectors['detailUrl'])
+            );
+
             $out = [
                 'releasename' => trim($releasename),
                 'sizeBytes' => $parsedSize['sizeBytes'],
@@ -296,17 +377,21 @@ class GenericSearchEngine implements SearchEngineInterface
                 'size' => TorrentSize::format($parsedSize['sizeBytes']),
                 'seeders' => $seeders,
                 'leechers' => $leechers,
-                'detailUrl' => (($this->config['includeBaseURL'] ?? false) ? $this->config['mirror'] : '').$this->getPropertyForSelector($node, $selectors['detailUrl']),
+                'detailUrl' => $detailUrl,
                 'noMagnet' => true,
                 'noTorrent' => true,
             ];
 
-            $magnet = $this->getPropertyForSelector($node, $selectors['magnetUrl'] ?? null);
-            $torrent = $this->getPropertyForSelector($node, $selectors['torrentUrl'] ?? null);
+            $magnet = $this->normalizeMagnetUrl(
+                $this->getPropertyForSelector($node, $selectors['magnetUrl'] ?? null)
+            );
+            $torrent = $this->resolveHttpUrl(
+                $this->getPropertyForSelector($node, $selectors['torrentUrl'] ?? null)
+            );
 
-            $infoHash = $magnet ? MagnetUri::extractInfoHash($magnet) : null;
+            $infoHash = $magnet !== null ? MagnetUri::extractInfoHash($magnet) : null;
 
-            if ($magnet) {
+            if ($magnet !== null) {
                 $out['magnetUrl'] = $magnet;
                 $out['noMagnet'] = false;
             }
@@ -315,15 +400,15 @@ class GenericSearchEngine implements SearchEngineInterface
                 $out['infoHash'] = $infoHash;
             }
 
-            if ($torrent) {
-                $out['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
+            if ($torrent !== null) {
+                $out['torrentUrl'] = $torrent;
                 $out['noTorrent'] = false;
             } elseif ($infoHash !== null) {
-                $out['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($out['releasename']));
+                $out['torrentUrl'] = 'https://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($out['releasename']));
                 $out['noTorrent'] = false;
             }
 
-            if (isset($this->config['detailsSelectors'])) {
+            if ($detailUrl !== null && isset($this->config['detailsSelectors'])) {
                 if (isset($this->config['detailsSelectors']['magnetUrl'])) {
                     $out['noMagnet'] = false;
                 }
@@ -352,11 +437,13 @@ class GenericSearchEngine implements SearchEngineInterface
         }
 
         $output = [];
-        $magnet = $this->getPropertyForSelector($container, $selectors['magnetUrl'] ?? null);
+        $magnet = $this->normalizeMagnetUrl(
+            $this->getPropertyForSelector($container, $selectors['magnetUrl'] ?? null)
+        );
 
-        $infoHash = $magnet ? MagnetUri::extractInfoHash($magnet) : null;
+        $infoHash = $magnet !== null ? MagnetUri::extractInfoHash($magnet) : null;
 
-        if ($magnet) {
+        if ($magnet !== null) {
             $output['magnetUrl'] = $magnet;
         }
 
@@ -364,11 +451,13 @@ class GenericSearchEngine implements SearchEngineInterface
             $output['infoHash'] = $infoHash;
         }
 
-        $torrent = $this->getPropertyForSelector($container, $selectors['torrentUrl'] ?? null);
-        if ($torrent) {
-            $output['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
+        $torrent = $this->resolveHttpUrl(
+            $this->getPropertyForSelector($container, $selectors['torrentUrl'] ?? null)
+        );
+        if ($torrent !== null) {
+            $output['torrentUrl'] = $torrent;
         } elseif ($infoHash !== null) {
-            $output['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($releaseName));
+            $output['torrentUrl'] = 'https://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($releaseName));
         }
 
         return $output;

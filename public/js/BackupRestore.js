@@ -247,7 +247,7 @@ window.BackupRestore = {
 
         let statusMsg = `${this.i18n['COMMON/loading-please-wait/lbl'] || 'Processing...'} ${percent}%`;
         if (data.status === 'extracting') statusMsg = this.i18n['BACKUPCTRLjs/progress/extracting'] || 'Extracting backup file...';
-        if (statusText) statusText.innerHTML = statusMsg;
+        if (statusText) statusText.textContent = statusMsg;
 
         if (data.show && data.type === 'show_progress') {
             if (showProgressDiv) {
@@ -255,10 +255,18 @@ window.BackupRestore = {
                 const showTitle = showProgressDiv.querySelector('.restore-show-text');
                 const showBar = showProgressDiv.querySelector('.show-progress-bar');
 
-                let showMsg = `${this.i18n['COMMON/searching/lbl'] || 'Restoring'}: <strong>${data.show}</strong>`;
-                if (data.season) showMsg += ` (${this.i18n['COMMON/season/lbl'] || 'Season'} ${data.season})`;
+                if (showTitle) {
+                    const prefix = this.i18n['COMMON/searching/lbl'] || 'Restoring';
+                    const strong = document.createElement('strong');
+                    strong.textContent = String(data.show);
 
-                if (showTitle) showTitle.innerHTML = showMsg;
+                    showTitle.replaceChildren(document.createTextNode(`${prefix}: `), strong);
+
+                    if (data.season) {
+                        const seasonLabel = this.i18n['COMMON/season/lbl'] || 'Season';
+                        showTitle.appendChild(document.createTextNode(` (${seasonLabel} ${data.season})`));
+                    }
+                }
                 if (showBar) showBar.style.width = (data.percent || 0) + '%';
             }
         } else if (data.status === 'running') {

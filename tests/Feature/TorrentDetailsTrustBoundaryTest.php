@@ -14,6 +14,7 @@ function makeDetailsEngine(string $mirror = 'https://mirror.example'): GenericSe
         'detailsSelectors' => [
             'detailsContainer' => 'div.details',
             'magnetUrl' => ['a.magnet', 'href'],
+            'torrentUrl' => ['a.torrent', 'href'],
         ],
         'selectors' => [],
         'endpoints' => ['search' => '/search/%s'],
@@ -126,4 +127,23 @@ it('caps same-origin redirect chains', function () {
         ->toThrow(Exception::class, 'Too many redirects');
 
     Http::assertSentCount(4);
+});
+
+it('drops executable and private download links extracted from a trusted details page', function () {
+    $hash = '0123456789ABCDEF0123456789ABCDEF01234567';
+
+    Http::fake([
+        'https://mirror.example/details/hostile' => Http::response(
+            '<div class="details">'.
+            '<a class="magnet" href="javascript:?xt=urn:btih:'.$hash.'">M</a>'.
+            '<a class="torrent" href="http://127.0.0.1/private.torrent">T</a>'.
+            '</div>',
+            200
+        ),
+    ]);
+
+    $details = makeDetailsEngine()->getDetails('https://mirror.example/details/hostile', 'release');
+
+    expect($details)->toBe([]);
+    Http::assertSentCount(1);
 });
