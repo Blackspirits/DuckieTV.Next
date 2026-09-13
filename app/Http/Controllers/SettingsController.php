@@ -200,6 +200,36 @@ class SettingsController extends Controller
     }
 
     /**
+     * Download a manual backup in the historical DuckieTV JSON format.
+     */
+    public function downloadBackup()
+    {
+        try {
+            $json = json_encode(
+                $this->backupService->createBackup(),
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            );
+
+            $filename = 'DuckieTV '.now()->format('Y-m-d').'.backup';
+
+            return response($json, 200, [
+                'Content-Type' => 'application/json',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                'Cache-Control' => 'no-store, max-age=0',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Backup export failed.', [
+                'exception' => $e::class,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Backup export failed.',
+            ], 500);
+        }
+    }
+
+    /**
      * Restore backup from file.
      */
     public function restore(\Illuminate\Http\Request $request)

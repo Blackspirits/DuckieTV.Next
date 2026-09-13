@@ -25,7 +25,7 @@ class RestoreBackupJobTest extends TestCase
 
         // Data with 2 series
         $data = [
-            'settings' => ['foo' => 'bar'],
+            'settings' => ['foo' => 'bar', 'useTrakt_id' => true],
             'series' => [
                 '123' => [],
                 '456' => [],
@@ -37,8 +37,18 @@ class RestoreBackupJobTest extends TestCase
 
         // Assert Batch Dispatched
         \Illuminate\Support\Facades\Bus::assertBatched(function (\Illuminate\Bus\PendingBatch $batch) {
-            return $batch->jobs->count() === 2 &&
-                   $batch->name == 'Restoring Backup (2 shows)';
+            if ($batch->jobs->count() !== 2 || $batch->name != 'Restoring Backup (2 shows)') {
+                return false;
+            }
+
+            foreach ($batch->jobs as $restoreShowJob) {
+                $property = new \ReflectionProperty($restoreShowJob, 'useTraktId');
+                if ($property->getValue($restoreShowJob) !== true) {
+                    return false;
+                }
+            }
+
+            return true;
         });
     }
 }

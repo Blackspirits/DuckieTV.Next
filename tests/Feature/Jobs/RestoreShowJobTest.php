@@ -24,9 +24,9 @@ class RestoreShowJobTest extends TestCase
         // Mock BackupService
         $service = Mockery::mock(BackupService::class);
         $service->shouldReceive('restoreShow')
-            ->with('123', [], Mockery::type('callable'))
+            ->with('123', [], Mockery::type('callable'), true)
             ->once()
-            ->andReturnUsing(function ($id, $data, $callback) {
+            ->andReturnUsing(function ($id, $data, $callback, $useTraktId) {
                 $callback(100, 'Done');
 
                 return true;
@@ -39,7 +39,7 @@ class RestoreShowJobTest extends TestCase
         }));
 
         // Use Test Double
-        $job = new TestRestoreShowJob('123', []);
+        $job = new TestRestoreShowJob('123', [], true);
         $job->setBatch($batch);
 
         $job->handle($service);

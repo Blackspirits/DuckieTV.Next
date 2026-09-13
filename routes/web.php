@@ -65,6 +65,7 @@ Route::prefix('torrents')->group(function () {
 // Settings
 Route::prefix('settings')->group(function () {
     Route::get('/', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
+    Route::get('/backup/export', [\App\Http\Controllers\SettingsController::class, 'downloadBackup'])->name('settings.backup-export');
     Route::post('/restore', [\App\Http\Controllers\SettingsController::class, 'restore'])->name('settings.restore');
     Route::get('/restore/progress', [\App\Http\Controllers\SettingsController::class, 'restoreProgress'])->name('settings.restore-progress');
     Route::post('/restore/cancel', [\App\Http\Controllers\SettingsController::class, 'cancelRestore'])->name('settings.restore-cancel');

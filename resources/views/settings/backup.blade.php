@@ -1,7 +1,7 @@
 <div ng-controller="BackupCtrl">
     <h2>Backup</h2>
     <div class="buttons">
-        <a class="btn btn-success" href="javascript:void(0)" onclick="alert('Backup functionality not yet implemented')">
+        <a class="btn btn-success" href="{{ route('settings.backup-export') }}">
             <i class="glyphicon glyphicon-floppy-save"></i> <span>Create Backup</span>
         </a>
     </div>
