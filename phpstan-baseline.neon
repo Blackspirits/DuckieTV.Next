@@ -1,0 +1,211 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/DTOs/TorrentData/KtorrentData.php
+
+		-
+			message: '#^Parameter \#1 \$startYear of method App\\Services\\CalendarService\:\:getEpisodeCountsByYear\(\) expects int, float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/CalendarController.php
+
+		-
+			message: '#^Parameter \#2 \$endYear of method App\\Services\\CalendarService\:\:getEpisodeCountsByYear\(\) expects int, float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/CalendarController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$episodes\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/SeriesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$episodes\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/SeriesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$seasonnumber\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/SeriesController.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/SeriesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Jobs/TraktUpdateJob.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$lastupdated\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Jobs/TraktUpdateJob.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Jobs/TraktUpdateJob.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trakt_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Jobs/TraktUpdateJob.php
+
+		-
+			message: '#^Loose comparison using \!\= between int\<min, \-1\>\|int\<1, max\> and 0 will always evaluate to true\.$#'
+			identifier: notEqual.alwaysTrue
+			count: 1
+			path: app/Models/Episode.php
+
+		-
+			message: '#^Loose comparison using \=\= between int\<min, \-1\>\|int\<1, max\> and 0 will always evaluate to false\.$#'
+			identifier: equal.alwaysFalse
+			count: 2
+			path: app/Models/Episode.php
+
+		-
+			message: '#^Parameter \#1 \$string of function str_pad expects string, int given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Models/Episode.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:each\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: mixed, Closure\(App\\Models\\Episode\)\: App\\Models\\Episode given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Models/Season.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Episode\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/Season.php
+
+		-
+			message: '#^Method App\\Models\\Serie\:\:getEpisodesMap\(\) should return array\<int, App\\Models\\Episode\> but returns array\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Method App\\Models\\Serie\:\:getLastEpisode\(\) should return App\\Models\\Episode\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Method App\\Models\\Serie\:\:getLatestSeason\(\) should return App\\Models\\Season\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Method App\\Models\\Serie\:\:getNextEpisode\(\) should return App\\Models\\Episode\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Method App\\Models\\Serie\:\:getSeasonsByNumber\(\) should return array\<int, App\\Models\\Season\> but returns array\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:each\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: mixed, Closure\(App\\Models\\Episode\)\: App\\Models\\Episode given\.$#'
+			identifier: argument.type
+			count: 3
+			path: app/Models/Serie.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 2
+			path: app/Services/AutoDownloadService.php
+
+		-
+			message: '#^Property App\\Services\\AutoDownloadService\:\:\$remoteTorrents has unknown class App\\DTOs\\TorrentData\\TorrentDataInterface as its type\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Services/AutoDownloadService.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between true and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 3
+			path: app/Services/AutoDownloadService.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 2
+			path: app/Services/CalendarService.php
+
+		-
+			message: '#^Offset ''rating'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Services/FavoritesService.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 2
+			path: app/Services/SubtitlesService.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: app/Services/SubtitlesService.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Services/TorrentClients/DelugeClient.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Http\\Client\\PendingRequest\:\:data\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Services/TorrentClients/QBittorrentClient.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Services/TorrentClients/QBittorrentClient.php
+
+		-
+			message: '#^Instanceof between Illuminate\\Http\\Client\\Response and Illuminate\\Http\\Client\\Response will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Services/TorrentSearchEngines/GenericSearchEngine.php
+
+		-
+			message: '#^Instanceof between Illuminate\\Http\\Client\\Response and Illuminate\\Http\\Client\\Response will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Services/WatchlistService.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: non\-empty\-string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Support/TorrentSize.php

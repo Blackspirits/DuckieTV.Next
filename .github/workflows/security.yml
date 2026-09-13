@@ -46,12 +46,12 @@ jobs:
 
       # Run Larastan and output to a .sarif file
       - name: Run Larastan Analysis
-        continue-on-error: true # Don't fail the build, just report alerts
-        run: |
-          ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif || true
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif
 
-      # Upload the PHP results to GitHub Security Tab
+      # Upload the PHP results to GitHub Security Tab even when analysis finds
+      # a new regression and exits non-zero.
       - name: Upload Analysis Results
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: phpstan-results.sarif
