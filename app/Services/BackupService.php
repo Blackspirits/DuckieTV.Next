@@ -33,9 +33,6 @@ class BackupService
      */
     public function restore(array $data, ?callable $onProgress = null): array
     {
-        // Enable global throttling to play nice with Trakt
-        $this->trakt->setThrottling(true);
-
         $stats = ['series_restored' => 0];
 
         if ($onProgress) {
@@ -96,7 +93,9 @@ class BackupService
             // 1. Fetch Trakt Data OUTSIDE any transaction
             //    This is a network call that can take seconds - we must NOT hold
             //    a database lock while waiting for the network response.
-            $traktData = $this->trakt->serie((string) $id);
+            $traktData = $this->trakt->withThrottling(
+                fn (): array => $this->trakt->serie((string) $id)
+            );
             $name = $traktData['title'] ?? "Series #{$id}";
 
             if ($onProgress) {

@@ -70,33 +70,34 @@ class TraktService
 
     private SettingsService $settings;
 
-    /**
-     * Whether to throttle requests to "play nice" with Trakt API.
-     * When true, sleeps for 1 second before *every* request.
-     */
     private bool $throttlingEnabled = false;
 
-    public function __construct(SettingsService $settings)
-    {
+    public function __construct(
+        SettingsService $settings,
+        private readonly TraktRequestThrottle $requestThrottle
+    ) {
         $this->settings = $settings;
     }
 
     /**
-     * Enable or disable global API throttling.
-     * Useful for bulk operations like backup restore.
+     * Run a bulk Trakt operation under the shared request throttle.
      */
-    public function setThrottling(bool $enabled): void
+    public function withThrottling(callable $callback): mixed
     {
-        $this->throttlingEnabled = $enabled;
+        $previous = $this->throttlingEnabled;
+        $this->throttlingEnabled = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->throttlingEnabled = $previous;
+        }
     }
 
-    /**
-     * Sleep if throttling is enabled.
-     */
     private function throttle(): void
     {
         if ($this->throttlingEnabled) {
-            sleep(1);
+            $this->requestThrottle->wait();
         }
     }
 
@@ -182,6 +183,7 @@ class TraktService
     private function apiGet(string $type, ?string $param = null, ?string $param2 = null, int $retry = 0): mixed
     {
         $this->checkRateLimit();
+        $this->throttle();
         $url = $this->getUrl($type, $param, $param2);
         // ... rest of method
 
@@ -216,6 +218,7 @@ class TraktService
     private function apiPost(string $type, array $data = [], int $retry = 0): mixed
     {
         $this->checkRateLimit();
+        $this->throttle();
         $url = $this->getUrl($type);
 
         $response = Http::withHeaders($this->getHeaders(true))
