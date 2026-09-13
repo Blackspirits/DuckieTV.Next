@@ -291,8 +291,12 @@ window.BackupRestore = {
             failuresContainer.style.display = 'block';
             if (this.failedSeries.length > this.lastFailedCount) {
                 for (let i = this.lastFailedCount; i < this.failedSeries.length; i++) {
+                    const failure = this.failedSeries[i];
                     const li = document.createElement('li');
-                    li.innerHTML = `<strong>${this.failedSeries[i].time}</strong>: ${this.failedSeries[i].id} - ${this.failedSeries[i].error}`;
+                    const time = document.createElement('strong');
+                    time.textContent = String(failure.time ?? '');
+                    li.appendChild(time);
+                    li.appendChild(document.createTextNode(`: ${failure.id ?? ''} - ${failure.error ?? ''}`));
                     failuresList.appendChild(li);
                 }
                 this.lastFailedCount = this.failedSeries.length;

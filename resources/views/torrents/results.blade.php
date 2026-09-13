@@ -58,7 +58,7 @@
     </td>
     <td>{{ $result['engine'] ?? '' }}</td>
     <td class="releasename" title="{{ $result['releasename'] ?? '' }}">{{ $result['releasename'] ?? '' }}</td>
-    <td style="text-align: right; white-space: nowrap;">{{ $result['size'] }}</td>
+    <td style="text-align: right; white-space: nowrap;">{{ !empty($result['sizeParseError']) ? __('Invalid size') : \App\Support\TorrentSize::format($result['sizeBytes'] ?? null) }}</td>
     <td style="text-align: right; color: #5cb85c; width:50px;">{{ $result['seeders'] }}</td>
     <td style="text-align: right; color: #d9534f; width:50px;">{{ $result['leechers'] }}</td>
 </tr>

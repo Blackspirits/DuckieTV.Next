@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use App\Services\TorrentSearchService;
+use Tests\TestCase;
 
 class TorrentSearchTest extends TestCase
 {
@@ -16,7 +16,7 @@ class TorrentSearchTest extends TestCase
     {
         $service = app(TorrentSearchService::class);
         $engines = array_keys($service->getSearchEngines());
-        
+
         // Dump the engines to stdout so we can see them
         fwrite(STDERR, print_r($engines, true));
 

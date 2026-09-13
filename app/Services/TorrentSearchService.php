@@ -79,6 +79,8 @@ class TorrentSearchService
      * Get the currently configured default search engine.
      *
      * @throws Exception if no default engine is configured or available
+     *
+     * @psalm-suppress PossiblyUnusedMethod Retained public service API after AutoDownloadJob consolidation.
      */
     public function getDefaultEngine(): SearchEngineInterface
     {

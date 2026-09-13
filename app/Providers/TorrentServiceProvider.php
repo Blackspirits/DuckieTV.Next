@@ -104,7 +104,7 @@ class TorrentServiceProvider extends ServiceProvider
     {
         // Register view composer for the main layout to inject active client data
         \Illuminate\Support\Facades\View::composer(
-            'layouts.app', 
+            'layouts.app',
             \App\Http\View\Composers\TorrentClientComposer::class
         );
     }

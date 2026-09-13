@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 class SubtitlesService
 {
     protected string $baseUrl = 'https://api.opensubtitles.org/xml-rpc';
+
     protected ?string $token = null;
 
     protected array $languages = [
@@ -24,7 +25,7 @@ class SubtitlesService
         'por' => 'Portuguese', 'rum' => 'Romanian', 'rus' => 'Russian', 'scc' => 'Serbian',
         'sin' => 'Sinhalese', 'slo' => 'Slovak', 'slv' => 'Slovenian', 'spa' => 'Spanish',
         'swe' => 'Swedish', 'tgl' => 'Tagalog', 'tha' => 'Thai', 'tur' => 'Turkish',
-        'ukr' => 'Ukrainian', 'vie' => 'Vietnamese'
+        'ukr' => 'Ukrainian', 'vie' => 'Vietnamese',
     ];
 
     /**
@@ -33,7 +34,7 @@ class SubtitlesService
     public function searchByEpisode(Episode $episode, array $languages = ['eng']): array
     {
         $serie = $episode->serie;
-        if (!$serie || !$serie->imdb_id) {
+        if (! $serie || ! $serie->imdb_id) {
             return [];
         }
 
@@ -76,15 +77,16 @@ class SubtitlesService
      */
     protected function search(array $options): array
     {
-        if (!$this->token) {
+        if (! $this->token) {
             $this->token = $this->login();
         }
 
-        if (!$this->token) {
+        if (! $this->token) {
             return [];
         }
 
         $response = $this->xmlRpcCall('SearchSubtitles', [$this->token, [$options]]);
+
         return $this->transformAndFilter($response['data'] ?? [], $options);
     }
 
@@ -94,6 +96,7 @@ class SubtitlesService
     protected function login(): ?string
     {
         $response = $this->xmlRpcCall('LogIn', ['', '', 'en', 'DuckieTV v1.00']);
+
         return $response['token'] ?? null;
     }
 
@@ -104,7 +107,7 @@ class SubtitlesService
     {
         try {
             $xmlRequest = $this->encodeXmlRpc($method, $params);
-            
+
             $response = Http::withHeaders(['Content-Type' => 'text/xml'])
                 ->withBody($xmlRequest, 'text/xml')
                 ->post($this->baseUrl);
@@ -113,9 +116,9 @@ class SubtitlesService
                 return $this->decodeXmlRpc($response->body());
             }
 
-            Log::error('OpenSubtitles XML-RPC error: ' . $response->body());
+            Log::error('OpenSubtitles XML-RPC error: '.$response->body());
         } catch (\Exception $e) {
-            Log::error('SubtitlesService XML-RPC Exception: ' . $e->getMessage());
+            Log::error('SubtitlesService XML-RPC Exception: '.$e->getMessage());
         }
 
         return [];
@@ -126,11 +129,12 @@ class SubtitlesService
      */
     protected function encodeXmlRpc(string $method, array $params): string
     {
-        $xml = '<?xml version="1.0"?><methodCall><methodName>' . $method . '</methodName><params>';
+        $xml = '<?xml version="1.0"?><methodCall><methodName>'.$method.'</methodName><params>';
         foreach ($params as $param) {
-            $xml .= '<param>' . $this->encodeValue($param) . '</param>';
+            $xml .= '<param>'.$this->encodeValue($param).'</param>';
         }
         $xml .= '</params></methodCall>';
+
         return $xml;
     }
 
@@ -144,22 +148,24 @@ class SubtitlesService
                     $xml .= $this->encodeValue($v);
                 }
                 $xml .= '</data></array></value>';
+
                 return $xml;
             } else {
                 // Struct
                 $xml = '<value><struct>';
                 foreach ($value as $k => $v) {
-                    $xml .= '<member><name>' . $k . '</name>' . $this->encodeValue($v) . '</member>';
+                    $xml .= '<member><name>'.$k.'</name>'.$this->encodeValue($v).'</member>';
                 }
                 $xml .= '</struct></value>';
+
                 return $xml;
             }
         } elseif (is_int($value)) {
-            return '<value><int>' . $value . '</int></value>';
+            return '<value><int>'.$value.'</int></value>';
         } elseif (is_bool($value)) {
-            return '<value><boolean>' . ($value ? '1' : '0') . '</boolean></value>';
+            return '<value><boolean>'.($value ? '1' : '0').'</boolean></value>';
         } else {
-            return '<value><string>' . htmlspecialchars((string)$value) . '</string></value>';
+            return '<value><string>'.htmlspecialchars((string) $value).'</string></value>';
         }
     }
 
@@ -168,10 +174,11 @@ class SubtitlesService
      */
     protected function decodeXmlRpc(string $xml): array
     {
-        $doc = new \DOMDocument();
+        $doc = new \DOMDocument;
         $doc->loadXML($xml);
         $xpath = new \DOMXPath($doc);
         $valueNode = $xpath->query('//params/param/value')->item(0);
+
         return $valueNode ? $this->parseValue($valueNode, $xpath) : [];
     }
 
@@ -181,7 +188,9 @@ class SubtitlesService
         while ($child && $child->nodeType !== XML_ELEMENT_NODE) {
             $child = $child->nextSibling;
         }
-        if (!$child) return $node->textContent;
+        if (! $child) {
+            return $node->textContent;
+        }
 
         switch ($child->nodeName) {
             case 'struct':
@@ -191,12 +200,14 @@ class SubtitlesService
                     $value = $this->parseValue($xpath->query('value', $member)->item(0), $xpath);
                     $struct[$name] = $value;
                 }
+
                 return $struct;
             case 'array':
                 $array = [];
                 foreach ($xpath->query('data/value', $child) ?? [] as $valueNode) {
                     $array[] = $this->parseValue($valueNode, $xpath);
                 }
+
                 return $array;
             case 'int':
             case 'i4':
@@ -216,7 +227,7 @@ class SubtitlesService
      */
     protected function transformAndFilter(array $results, array $query): array
     {
-        
+
         $filtered = array_filter($results, function ($sub) use ($query) {
             // Replicating original parseSubtitles logic
             if (($sub['SubFormat'] ?? '') !== 'srt') {
@@ -224,9 +235,9 @@ class SubtitlesService
             }
 
             if (isset($query['imdbid']) && isset($query['season']) && isset($query['episode'])) {
-                if ((int)($sub['SeriesIMDBParent'] ?? 0) !== (int)$query['imdbid'] ||
-                    (int)($sub['SeriesSeason'] ?? -1) !== (int)$query['season'] ||
-                    (int)($sub['SeriesEpisode'] ?? -1) !== (int)$query['episode']) {
+                if ((int) ($sub['SeriesIMDBParent'] ?? 0) !== (int) $query['imdbid'] ||
+                    (int) ($sub['SeriesSeason'] ?? -1) !== (int) $query['season'] ||
+                    (int) ($sub['SeriesEpisode'] ?? -1) !== (int) $query['episode']) {
                     return false;
                 }
             }
@@ -234,10 +245,10 @@ class SubtitlesService
             return true;
         });
 
-
         // Add language names and return values, mapping to REST-like structure for frontend compatibility
         return array_values(array_map(function ($sub) {
             $langCode = $sub['SubLanguageID'] ?? 'unknown';
+
             return [
                 'attributes' => [
                     'language' => $langCode,
@@ -249,8 +260,8 @@ class SubtitlesService
                     'feature_details' => [
                         'season_number' => $sub['SeriesSeason'] ?? null,
                         'episode_number' => $sub['SeriesEpisode'] ?? null,
-                    ]
-                ]
+                    ],
+                ],
             ];
         }, $filtered));
     }

@@ -103,8 +103,7 @@ return [
     'updater' => [
         /**
          * Whether or not the updater is enabled. Please note that the
-         * updater will only work when your application is bundled
-         * for production.
+         * updater will only work when your application is bundled for production.
          */
         'enabled' => env('NATIVEPHP_UPDATER_ENABLED', true),
 
@@ -167,7 +166,9 @@ return [
      */
     'queue_workers' => [
         'default' => [
-            'queues' => ['default'],
+            // AutoDL gets its own persistent queue identity for crash recovery,
+            // but is consumed by the same NativePHP worker before default work.
+            'queues' => ['autodownload', 'default'],
             'memory_limit' => 128,
             'timeout' => 300,
             'sleep' => 3,

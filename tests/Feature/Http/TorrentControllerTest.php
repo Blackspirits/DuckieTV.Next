@@ -39,7 +39,7 @@ it('renders the torrent search dialog with pre-filled query', function () {
     $response->assertViewHas('qualityList');
     $response->assertSee('Torrent Search');
     $response->assertSee('Breaking Bad S01E01');
-    
+
     // Assert HTML Parity with torrent2.html
     $response->assertSee('torrentDialog_topNav');
     $response->assertSee('torrentDialog_searchBar');

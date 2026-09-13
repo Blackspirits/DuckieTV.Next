@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Episode;
+use App\Support\MagnetUri;
 use Illuminate\Http\Request;
 
 class EpisodeController extends Controller
@@ -25,11 +26,26 @@ class EpisodeController extends Controller
             try {
                 if ($client->connect()) {
                     $torrents = $client->getTorrents();
-                    
-                    // Priority 1: Match by InfoHash (if episode has one)
+
+                    // Priority 1: Match canonical BTIH, preserving exact fallback for legacy non-BTIH values.
                     if ($episode->magnetHash) {
+                        $storedHash = MagnetUri::normalizeInfoHash($episode->magnetHash);
+
                         foreach ($torrents as $torrent) {
-                            if ((method_exists($torrent, 'getInfoHash') && $torrent->getInfoHash() === $episode->magnetHash) || (isset($torrent->infoHash) && $torrent->infoHash === $episode->magnetHash)) {
+                            $rawHash = method_exists($torrent, 'getInfoHash')
+                                ? $torrent->getInfoHash()
+                                : ($torrent->infoHash ?? null);
+
+                            if (! is_string($rawHash)) {
+                                continue;
+                            }
+
+                            $remoteHash = MagnetUri::normalizeInfoHash($rawHash);
+                            $matches = $storedHash !== null
+                                ? $remoteHash === $storedHash
+                                : $rawHash === $episode->magnetHash;
+
+                            if ($matches) {
                                 $matchedTorrent = $torrent;
                                 break;
                             }
@@ -37,7 +53,7 @@ class EpisodeController extends Controller
                     }
 
                     // Priority 2: Fallback to name matching if no infoHash match
-                    if (!$matchedTorrent) {
+                    if (! $matchedTorrent) {
                         $showName = strtolower($serie->name);
                         $showNameDots = str_replace(' ', '.', $showName);
                         $episodeCode = strtolower($episode->formatted_episode);
@@ -94,7 +110,7 @@ class EpisodeController extends Controller
     {
         $episode = Episode::with('serie')->findOrFail($id);
         $service = app(\App\Services\AutoDownloadService::class);
-        
+
         $success = $service->manualDownload($episode);
 
         if ($success) {

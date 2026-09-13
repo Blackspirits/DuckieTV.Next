@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\TransmissionData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Transmission torrent client implementation.
@@ -58,6 +57,7 @@ class TransmissionClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
         $response = $this->rpc('session-get');
         $this->connected = isset($response['result']) && $response['result'] === 'success';
 
@@ -69,15 +69,23 @@ class TransmissionClient extends BaseTorrentClient
      */
     public function getTorrents(): array
     {
-        $response = $this->rpc('torrent-get', [
-            'fields' => [
-                'id', 'name', 'hashString', 'status', 'error', 'errorString', 'eta',
-                'isFinished', 'isStalled', 'leftUntilDone', 'metadataPercentComplete',
-                'percentDone', 'sizeWhenDone', 'files', 'rateDownload', 'rateUpload', 'downloadDir',
-            ],
-        ]);
+        try {
+            $response = $this->rpc('torrent-get', [
+                'fields' => [
+                    'id', 'name', 'hashString', 'status', 'error', 'errorString', 'eta',
+                    'isFinished', 'isStalled', 'leftUntilDone', 'metadataPercentComplete',
+                    'percentDone', 'sizeWhenDone', 'files', 'rateDownload', 'rateUpload', 'downloadDir',
+                ],
+            ]);
+        } catch (Exception $e) {
+            $this->connected = false;
+
+            throw $e;
+        }
 
         if (! isset($response['arguments']['torrents'])) {
+            $this->connected = false;
+
             return [];
         }
 
@@ -180,7 +188,7 @@ class TransmissionClient extends BaseTorrentClient
     {
         $url = rtrim($this->config['server'], '/').':'.$this->config['port'].'/'.ltrim($this->config['path'], '/');
 
-        $request = Http::withHeaders([
+        $request = $this->http()->withHeaders([
             'X-Transmission-Session-Id' => $this->sessionId ?? '',
         ]);
 

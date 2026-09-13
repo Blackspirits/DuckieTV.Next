@@ -1,42 +1,60 @@
 <div class="buttons">
-    <h2>
-        <span title="{{ settings('autodownload.enabled') ? 'Enabled' : 'Disabled' }}">
-            <i class="glyphicon {{ settings('autodownload.enabled') ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
-        </span>
-        Auto-Download
-    </h2>
+    <form data-section="auto-download" onsubmit="return false;">
+        <h2>
+            <span title="{{ settings()->get('torrenting.autodownload', false) ? 'Enabled' : 'Disabled' }}">
+                <i class="glyphicon {{ settings()->get('torrenting.autodownload', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            </span>
+            Auto-Download
+        </h2>
 
-    <p>{{ settings('autodownload.enabled') ? 'Auto-Download is active. DuckieTV will search for episodes regularly.' : 'Auto-Download is disabled. You must manually search for episodes.' }}</p>
-    <p><strong>Current Setting:</strong> {{ settings('autodownload.enabled') ? 'Enabled' : 'Disabled' }}</p>
-    
-    <a href="javascript:void(0)" onclick="alert('Toggle auto-download not implemented')" class="btn btn-{{ settings('autodownload.enabled') ? 'danger' : 'success' }}">
-        <i class="glyphicon {{ settings('autodownload.enabled') ? 'glyphicon-remove-sign' : 'glyphicon-cloud-download' }}"></i> 
-        {{ settings('autodownload.enabled') ? 'Disable Auto-Download' : 'Enable Auto-Download' }}
-    </a>
+        <p>Periodic auto-download runs every <strong>15 minutes</strong> while DuckieTV is active.</p>
+        <label>
+            <input type="checkbox" name="torrenting.autodownload" value="1" {{ settings()->get('torrenting.autodownload', false) ? 'checked' : '' }}>
+            Enable periodic auto-download
+        </label>
 
-    <hr class="setting-divider">
+        <hr class="setting-divider">
 
-    <div class="autodownload">
-        <h2>Check Frequency</h2>
-        <p>DuckieTV checks for new episodes every <strong>{{ settings('autodownload.period', 6) }}</strong> hours.<br>Default: 6 hours.</p>
-
-        <form>
-            Update Frequency (Hours): <input type="number" name="period" value="{{ settings('autodownload.period', 6) }}" min="1" max="21" required />
-            <a class="btn btn-success" href="javascript:void(0)" onclick="alert('Save period not implemented')" style="float:right; margin-top:-10px;">
-                <i class="glyphicon glyphicon-floppy-save"></i>&nbsp; <span>Save</span>
-            </a>
-        </form>
+        <h2>Lookback / Recovery Window</h2>
+        <p>
+            Recently aired episodes are reconsidered using this overlap window so missed checks after sleep,
+            offline periods, or app restarts can catch up. This value does <strong>not</strong> control the 15-minute cadence.
+        </p>
+        <label>
+            Lookback (days):
+            <input
+                type="number"
+                name="autodownload.period"
+                value="{{ settings()->get('autodownload.period', 1) }}"
+                min="1"
+                max="21"
+                step="1"
+                required
+            >
+        </label>
+        <p><small>Default: 1 day. Allowed range: 1–21 days.</small></p>
 
         <hr class="setting-divider">
 
         <h2>Auto-Download Delay</h2>
-        <p>Wait before downloading to allow for better quality releases (e.g. 2 hours).</p>
+        <p>Wait after the episode runtime before searching, to allow better releases to appear.</p>
+        <label>
+            Delay (minutes):
+            <input
+                type="number"
+                name="autodownload.delay"
+                value="{{ settings()->get('autodownload.delay', 15) }}"
+                min="0"
+                step="1"
+                required
+            >
+        </label>
+        <p><small>Default: 15 minutes. The effective delay is capped by the configured lookback window.</small></p>
 
-        <form>
-            Delay (Days Hours:Minutes): <input type="text" name="delay" value="{{ settings('autodownload.delay', '0 02:00') }}" pattern="([0-9]){1,2}(\s){1}([0-2][0-9]){1}([:]){1}([0-5][0-9]){1}" style="width: 100px" />
-            <a class="btn btn-success" href="javascript:void(0)" onclick="alert('Save delay not implemented')" style="float:right; margin-top:-10px;">
-                <i class="glyphicon glyphicon-floppy-save"></i>&nbsp; <span>Save</span>
-            </a>
-        </form>
-    </div>
+        <hr class="setting-divider">
+
+        <button type="button" class="btn btn-primary btn-save" onclick="Settings.save('auto-download')">
+            <i class="glyphicon glyphicon-floppy-save"></i>&nbsp; Save
+        </button>
+    </form>
 </div>

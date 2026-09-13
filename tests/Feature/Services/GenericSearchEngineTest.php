@@ -31,14 +31,14 @@ class GenericSearchEngineTest extends TestCase
         $html = '
             <div class="result">
                 <a class="title" href="/details/1">Release 1</a>
-                <a class="magnet" href="magnet:?xt=urn:btih:HASH1">Magnet</a>
+                <a class="magnet" href="magnet:?xt=urn:btih:0123456789ABCDEF0123456789ABCDEF01234567">Magnet</a>
                 <span class="size">1.5 GB</span>
                 <span class="seeders">100</span>
                 <span class="leechers">50</span>
             </div>
             <div class="result">
                 <a class="title" href="/details/2">Release 2</a>
-                <a class="magnet" href="magnet:?xt=urn:btih:HASH2">Magnet</a>
+                <a class="magnet" href="magnet:?xt=urn:btih:aaisem2ekvthpcezvk54zxpo74abcirt">Magnet</a>
                 <span class="size">800 MB</span>
                 <span class="seeders">200</span>
                 <span class="leechers">10</span>
@@ -55,29 +55,19 @@ class GenericSearchEngineTest extends TestCase
         $this->assertCount(2, $results);
 
         $this->assertEquals('Release 1', $results[0]['releasename']);
-        $this->assertEquals('1,500.00 MB', $results[0]['size']);
+        $this->assertSame(1_500_000_000, $results[0]['sizeBytes']);
+        $this->assertFalse($results[0]['sizeParseError']);
+        $this->assertSame('1.5 GB', $results[0]['size']);
         $this->assertEquals(100, $results[0]['seeders']);
         $this->assertEquals(50, $results[0]['leechers']);
-        $this->assertEquals('magnet:?xt=urn:btih:HASH1', $results[0]['magnetUrl']);
+        $this->assertEquals('magnet:?xt=urn:btih:0123456789ABCDEF0123456789ABCDEF01234567', $results[0]['magnetUrl']);
+        $this->assertSame('0123456789abcdef0123456789abcdef01234567', $results[0]['infoHash']);
         $this->assertEquals('https://mock.engine/details/1', $results[0]['detailUrl']);
 
         $this->assertEquals('Release 2', $results[1]['releasename']);
-        $this->assertEquals('800.00 MB', $results[1]['size']);
-    }
-
-    public function test_it_handles_size_conversion()
-    {
-        $engine = new GenericSearchEngine($this->mockConfig);
-
-        // Use reflection to test protected sizeToMB method
-        $reflection = new \ReflectionClass(GenericSearchEngine::class);
-        $method = $reflection->getMethod('sizeToMB');
-        $method->setAccessible(true);
-
-        $this->assertEquals('1,000.00 MB', $method->invokeArgs($engine, ['1 GB']));
-        $this->assertEquals('1,000.00 MB', $method->invokeArgs($engine, ['1000 MB']));
-        $this->assertEquals('0.50 MB', $method->invokeArgs($engine, ['500 KB']));
-        $this->assertEquals('1.05 MB', $method->invokeArgs($engine, ['1 MiB']));
-        $this->assertEquals('1,073.74 MB', $method->invokeArgs($engine, ['1 GiB']));
+        $this->assertSame(800_000_000, $results[1]['sizeBytes']);
+        $this->assertFalse($results[1]['sizeParseError']);
+        $this->assertSame('800 MB', $results[1]['size']);
+        $this->assertSame('00112233445566778899aabbccddeeff00112233', $results[1]['infoHash']);
     }
 }

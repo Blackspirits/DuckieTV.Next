@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\DelugeData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Deluge Client Implementation.
@@ -57,14 +56,20 @@ class DelugeClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
+
         // Check if session is already valid
         $response = $this->rpc('auth.check_session');
         if ($response) {
+            $this->connected = true;
+
             return true;
         }
 
         // Login if needed
-        return $this->rpc('auth.login', [$this->config['password']]);
+        $this->connected = (bool) $this->rpc('auth.login', [$this->config['password']]);
+
+        return $this->connected;
     }
 
     /**
@@ -79,6 +84,8 @@ class DelugeClient extends BaseTorrentClient
             ]);
 
             if (! isset($data['torrents'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -91,6 +98,8 @@ class DelugeClient extends BaseTorrentClient
                 'save_path' => $task['save_path'] ?? null,
             ]))->values()->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
@@ -214,7 +223,7 @@ class DelugeClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/upload';
 
-            $response = Http::withCookies($this->cookie ? ['_session_id' => $this->cookie] : [], $this->getBaseDomain())
+            $response = $this->http()->withCookies($this->cookie ? ['_session_id' => $this->cookie] : [], $this->getBaseDomain())
                 ->attach('file', $data, $releaseName.'.torrent')
                 ->post($url);
 
@@ -243,7 +252,7 @@ class DelugeClient extends BaseTorrentClient
     {
         $url = $this->getBaseUrl().'/json';
 
-        $request = Http::withHeaders([
+        $request = $this->http()->withHeaders([
             'Content-Type' => 'application/json',
         ]);
 

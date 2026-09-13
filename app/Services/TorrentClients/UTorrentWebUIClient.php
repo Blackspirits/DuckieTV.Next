@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\UTorrentWebUIData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -64,13 +63,15 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/gui/token.html';
 
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
 
             $response = $request->get($url);
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return false;
             }
 
@@ -113,6 +114,8 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $response = $this->request('list=1');
             if (! isset($response['torrents'])) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -124,6 +127,8 @@ class UTorrentWebUIClient extends BaseTorrentClient
                 'download_speed' => $torrent[9],
             ]))->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
@@ -261,7 +266,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
         try {
             $url = $this->getBaseUrl().'/gui/?token='.$this->token.'&action=add-file';
 
-            $request = Http::asMultipart();
+            $request = $this->http()->asMultipart();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -284,11 +289,11 @@ class UTorrentWebUIClient extends BaseTorrentClient
      *
      * @throws Exception
      */
-    protected function request(string $query): array
+    protected function request(string $query, bool $retriedAfterTokenRefresh = false): array
     {
         $url = $this->getBaseUrl().'/gui/?token='.$this->token.'&'.$query;
 
-        $request = Http::asForm();
+        $request = $this->http()->asForm();
         if ($this->config['use_auth']) {
             $request->withBasicAuth($this->config['username'], $this->config['password']);
         }
@@ -300,13 +305,11 @@ class UTorrentWebUIClient extends BaseTorrentClient
         $response = $request->get($url);
 
         if (! $response->successful()) {
-            // If 400/401, token might have expired
-            if ($response->status() === 400 || $response->status() === 401) {
-                $this->connect();
-
-                // retry once
-                return $this->request($query);
+            $tokenExpired = $response->status() === 400 || $response->status() === 401;
+            if ($tokenExpired && ! $retriedAfterTokenRefresh && $this->connect()) {
+                return $this->request($query, true);
             }
+
             throw new Exception('uTorrent API error: '.$response->status());
         }
 

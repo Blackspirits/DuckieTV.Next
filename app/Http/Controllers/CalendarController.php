@@ -49,7 +49,7 @@ class CalendarController extends Controller
     {
         $year = $date->year;
         // Calculate start of decade (e.g. 2020 for 2026)
-        $startYear = floor($year / 10) * 10 - 1; 
+        $startYear = floor($year / 10) * 10 - 1;
         $endYear = $startYear + 11;
 
         $years = $this->calendar->getEpisodeCountsByYear($startYear, $endYear);
@@ -60,7 +60,7 @@ class CalendarController extends Controller
             'currentDate' => $date, // Keep the specific date for context
             'startYear' => $startYear,
             'endYear' => $endYear,
-            'title' => $startYear . '-' . $endYear,
+            'title' => $startYear.'-'.$endYear,
         ];
     }
 
@@ -159,6 +159,6 @@ class CalendarController extends Controller
         $newMode = ($currentMode === 'calendar') ? 'todo' : 'calendar';
         session(['viewmode' => $newMode]);
 
-        return back()->with('status', "Switched to " . ucfirst($newMode) . " view.");
+        return back()->with('status', 'Switched to '.ucfirst($newMode).' view.');
     }
 }
