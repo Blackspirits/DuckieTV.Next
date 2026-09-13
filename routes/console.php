@@ -2,6 +2,7 @@
 
 use App\Jobs\PruneAutoDLActivitiesJob;
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\TraktUpdateLifecycleService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -21,5 +22,11 @@ Schedule::call(function (): void {
 })
     ->name('auto-download:lifecycle')
     ->everyFifteenMinutes();
+
+Schedule::call(function (): void {
+    app(TraktUpdateLifecycleService::class)->dispatchIfDue();
+})
+    ->name('trakt-update:lifecycle')
+    ->everyMinute();
 
 Schedule::job(new PruneAutoDLActivitiesJob)->daily();

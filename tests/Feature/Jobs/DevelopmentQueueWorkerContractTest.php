@@ -14,6 +14,8 @@ it('listens to autodownload before default in composer development mode', functi
     expect($command)
         ->toContain('queue:listen')
         ->toContain('--queue=autodownload,default')
+        ->toContain('--queue=trakt-update')
+        ->toContain('--names=server,queue,trakt,logs')
         ->toContain('--tries=1')
         ->toContain('--timeout=0');
 });

@@ -95,8 +95,18 @@ class TraktUpdateJob implements ShouldQueue
         $period = (int) $settings->get('trakt-update.period', 1); // hours
         $lastUpdated = (int) $settings->get('trakttv.lastupdated', 0);
 
+        // Match the historical Angular startup contract. On the first run it
+        // initialized the timestamp and waited one configured period before
+        // performing a full favorites refresh.
+        if ($lastUpdated <= 0) {
+            $settings->set('trakttv.lastupdated', $nowMs);
+            Log::info('TraktUpdate: Initialized first-run timestamp; deferring favorite refresh.');
+
+            return;
+        }
+
         // Check if enough time has passed
-        if ($lastUpdated > 0 && ($lastUpdated + ($period * 3600 * 1000)) > $nowMs) {
+        if (($lastUpdated + ($period * 3600 * 1000)) > $nowMs) {
             Log::info("TraktUpdate: Skipping, already done within the last {$period} hour(s).");
 
             return;

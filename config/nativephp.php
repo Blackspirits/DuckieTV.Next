@@ -174,6 +174,14 @@ return [
             'timeout' => 300,
             'sleep' => 3,
         ],
+        'trakt' => [
+            // Long-running Trakt refreshes must not monopolize the worker that
+            // serves AutoDL and interactive/default background work.
+            'queues' => ['trakt-update'],
+            'memory_limit' => 128,
+            'timeout' => 3600,
+            'sleep' => 3,
+        ],
     ],
 
     /**
