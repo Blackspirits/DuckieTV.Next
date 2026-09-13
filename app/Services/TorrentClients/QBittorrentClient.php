@@ -6,6 +6,7 @@ use App\DTOs\TorrentData\QBittorrentData;
 use App\Services\SettingsService;
 use Exception;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 
@@ -70,14 +71,29 @@ class QBittorrentClient extends BaseTorrentClient
     /**
      * Construct a full URL for a qBittorrent API endpoint.
      */
-    protected function getUrl(string $path): string
+    protected function getWebUiOrigin(): string
     {
         $server = $this->config['server'] ?? 'http://localhost';
         if (! preg_match('/^https?:\/\//', $server)) {
             $server = 'http://'.$server;
         }
 
-        return rtrim($server, '/').':'.($this->config['port'] ?? '8080').'/api/v2/'.ltrim($path, '/');
+        return rtrim($server, '/').':'.($this->config['port'] ?? '8080');
+    }
+
+    protected function getUrl(string $path): string
+    {
+        return $this->getWebUiOrigin().'/api/v2/'.ltrim($path, '/');
+    }
+
+    protected function webApiRequest(): PendingRequest
+    {
+        $origin = $this->getWebUiOrigin();
+
+        return $this->http()->withHeaders([
+            'Origin' => $origin,
+            'Referer' => $origin.'/',
+        ]);
     }
 
     /**
@@ -98,7 +114,7 @@ class QBittorrentClient extends BaseTorrentClient
         }
 
         if ($this->cookie !== null) {
-            $response = $this->http()
+            $response = $this->webApiRequest()
                 ->withHeaders(['Cookie' => $this->cookie])
                 ->get($this->getUrl('torrents/info'));
 
@@ -115,7 +131,7 @@ class QBittorrentClient extends BaseTorrentClient
         }
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->asForm()->post($this->getUrl('auth/login'), [
+        $response = $this->webApiRequest()->asForm()->post($this->getUrl('auth/login'), [
             'username' => $this->config['username'],
             'password' => $this->config['password'],
         ]);
@@ -201,7 +217,7 @@ class QBittorrentClient extends BaseTorrentClient
             $this->torrentSnapshot = null;
         } else {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = $this->http()
+            $response = $this->webApiRequest()
                 ->withHeaders(['Cookie' => $this->cookie])
                 ->get($this->getUrl('torrents/info'));
 
@@ -233,7 +249,7 @@ class QBittorrentClient extends BaseTorrentClient
             return false;
         }
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
             ->post($this->getUrl('torrents/resume'), ['hashes' => $infoHash]);
 
@@ -257,7 +273,7 @@ class QBittorrentClient extends BaseTorrentClient
             return false;
         }
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
             ->post($this->getUrl('torrents/pause'), ['hashes' => $infoHash]);
 
@@ -273,7 +289,7 @@ class QBittorrentClient extends BaseTorrentClient
             return false;
         }
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
             ->post($this->getUrl('torrents/delete'), [
                 'hashes' => $infoHash,
@@ -292,7 +308,7 @@ class QBittorrentClient extends BaseTorrentClient
             return [];
         }
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->get($this->getUrl('torrents/files'), ['hash' => $infoHash]);
 
         return $response->json() ?? [];
@@ -307,7 +323,7 @@ class QBittorrentClient extends BaseTorrentClient
             return false;
         }
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->get($this->getUrl('torrents/info'), ['hashes' => $infoHash]);
         $data = $response->json()[0] ?? null;
 
@@ -334,7 +350,7 @@ class QBittorrentClient extends BaseTorrentClient
             $params['category'] = $label;
         }
 
-        $response = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
             ->post($this->getUrl('torrents/add'), $params);
 
@@ -359,7 +375,7 @@ class QBittorrentClient extends BaseTorrentClient
             return false;
         }
 
-        $request = $this->http()->withHeaders(['Cookie' => $this->cookie])
+        $request = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->attach('torrents', $data, $releaseName.'.torrent');
 
         if ($dlPath) {
