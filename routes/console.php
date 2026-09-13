@@ -11,6 +11,12 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::call(function (): void {
+    app(AutoDownloadLifecycleService::class)->recoverExpiredReservation();
+})
+    ->name('auto-download:recovery')
+    ->everyMinute();
+
+Schedule::call(function (): void {
     app(AutoDownloadLifecycleService::class)->dispatchIfEligible();
 })
     ->name('auto-download:lifecycle')

@@ -134,9 +134,9 @@ class AutoDownloadKilledWorkerRecoveryTest extends TestCase
         $this->assertSame(0, DB::table('failed_jobs')->count());
         $this->assertSame(2, DB::table('cache_locks')->count());
 
-        // Compress 91 seconds of wall time. At real retry_after=90 the 85-second
-        // overlap lock has expired, while the 120-second uniqueness lease is still
-        // valid. Age the reservation and those two TTLs consistently.
+        // Compress 91 seconds of wall time. At the dedicated AutoDL 90-second
+        // recovery boundary the 85-second overlap lock has expired, while the
+        // 120-second uniqueness lease is still valid. Age the persisted state consistently.
         DB::table('jobs')
             ->where('id', $rowAfterKill->id)
             ->update(['reserved_at' => now()->subSeconds(91)->timestamp]);
@@ -146,6 +146,8 @@ class AutoDownloadKilledWorkerRecoveryTest extends TestCase
         DB::table('cache_locks')
             ->where('key', $uniqueLock->key)
             ->update(['expiration' => now()->addSeconds(29)->timestamp]);
+
+        $this->assertSame(1, $lifecycle->recoverExpiredReservation());
 
         // A lifecycle trigger still cannot create a competing recovery row even
         // though the dispatch lease is finite: the persisted queue row is the gate.

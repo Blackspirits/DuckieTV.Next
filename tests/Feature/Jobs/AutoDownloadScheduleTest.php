@@ -12,6 +12,10 @@ class AutoDownloadScheduleTest extends TestCase
     {
         $events = app(Schedule::class)->events();
 
+        $recovery = collect($events)->first(
+            fn ($event): bool => ($event->description ?? null) === 'auto-download:recovery'
+        );
+
         $autoDownload = collect($events)->first(
             fn ($event): bool => ($event->description ?? null) === 'auto-download:lifecycle'
         );
@@ -20,6 +24,9 @@ class AutoDownloadScheduleTest extends TestCase
             return str_contains((string) ($event->description ?? ''), PruneAutoDLActivitiesJob::class)
                 || str_contains((string) ($event->command ?? ''), PruneAutoDLActivitiesJob::class);
         });
+
+        $this->assertNotNull($recovery, 'Auto-download recovery is not registered with the scheduler.');
+        $this->assertSame('* * * * *', $recovery->expression);
 
         $this->assertNotNull($autoDownload, 'Auto-download lifecycle is not registered with the scheduler.');
         $this->assertSame('*/15 * * * *', $autoDownload->expression);

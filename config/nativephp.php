@@ -156,13 +156,14 @@ return [
     ],
 
     /**
-     * The queue workers that get auto-started on your application start.
+     * The queue workers that get auto-started on application start.
      *
-     * IMPORTANT: timeout must be >= the longest job's $timeout property.
-     * RestoreShowJob has $timeout = 180, TraktUpdateJob has $timeout = 3600.
-     * We set this to 300 as a reasonable compromise for the queue worker.
-     * Jobs with longer timeouts (TraktUpdateJob) should handle their own
-     * time management internally.
+     * Laravel uses a job's own $timeout when one is declared; this worker
+     * timeout is the fallback for jobs without an explicit timeout.
+     * The database queue retry_after is deliberately longer than every known
+     * job/worker timeout so a live reservation cannot be redelivered early.
+     * AutoDL keeps its shorter crash-recovery SLA through its dedicated
+     * lifecycle recovery path rather than the connection-wide retry_after.
      */
     'queue_workers' => [
         'default' => [

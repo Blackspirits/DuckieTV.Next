@@ -19,7 +19,7 @@ class AutoDownloadJob implements ShouldBeUnique, ShouldQueue
     /** Cooperative budget used by AutoDownloadService before starting more expensive work. */
     public const SCAN_BUDGET_SECONDS = 45;
 
-    /** Execution lock expiry: above bounded scan runtime, below this queue's retry_after. */
+    /** Execution lock expiry: above bounded scan runtime, below the 90-second recovery boundary. */
     public const OVERLAP_EXPIRY_SECONDS = 85;
 
     /** Dispatch lock remains bounded while covering normal pending/running lifecycle. */
