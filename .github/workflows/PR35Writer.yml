@@ -1,6 +1,8 @@
 name: PR35 Wipe Contract Writer
 
 on:
+  push:
+    branches: [audit/tmp-pr35-writer]
   pull_request:
     branches: [master]
 
