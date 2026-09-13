@@ -1,17 +1,20 @@
-name: PR34 Diagnostics
+name: PR34 Fix Writer
 
 on:
   pull_request:
     branches: [master]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: audit/pr-34-manual-backup-roundtrip
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -23,13 +26,28 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      - name: Show Pint diff
+      - name: Fix typed episode iteration and format
+        shell: bash
         run: |
-          ./vendor/bin/pint app/Services/BackupService.php --test -v || true
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/Services/BackupService.php')
+          text = path.read_text()
+          old = "foreach ($serie->episodes()->orderBy('id')->get() as $episode) {"
+          new = "foreach (Episode::query()->where('serie_id', $serie->id)->orderBy('id')->get() as $episode) {"
+          if old not in text:
+              raise SystemExit('expected episode relation iteration not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
           ./vendor/bin/pint app/Services/BackupService.php
-          echo '===PINT_FORMATTED_FILE_BEGIN==='
-          cat app/Services/BackupService.php
-          echo '===PINT_FORMATTED_FILE_END==='
 
-      - name: Show Larastan regressions
+      - name: Verify static analysis
         run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=table
+
+      - name: Push candidate fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/Services/BackupService.php
+          git commit -m "fix: satisfy backup round-trip quality gates"
+          git push origin HEAD:audit/pr-34-manual-backup-roundtrip
