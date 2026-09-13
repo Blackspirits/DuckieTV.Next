@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('airs_time', 15)->nullable();
             $table->string('timezone', 30)->nullable();
             $table->string('contentrating', 20)->nullable();
-            $table->date('firstaired')->nullable();
+            $table->bigInteger('firstaired')->nullable();
             $table->string('genre', 50)->nullable();
             $table->string('country', 50)->nullable();
             $table->string('language', 50)->nullable();
@@ -30,11 +30,11 @@ return new class extends Migration
             $table->integer('ratingcount')->nullable();
             $table->integer('runtime')->nullable();
             $table->string('status', 50)->nullable();
-            $table->date('added')->nullable();
+            $table->bigInteger('added')->nullable();
             $table->string('addedby', 50)->nullable();
             $table->string('fanart', 150)->nullable();
             $table->string('poster', 150)->nullable();
-            $table->bigInteger('lastupdated')->nullable();
+            $table->string('lastupdated', 40)->nullable();
             $table->bigInteger('lastfetched')->nullable();
             $table->bigInteger('nextupdate')->nullable();
             $table->boolean('displaycalendar')->default(true);

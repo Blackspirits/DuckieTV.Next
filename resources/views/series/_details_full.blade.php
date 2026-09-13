@@ -49,7 +49,7 @@
             </tr>
             <tr>
                 <th>FIRST AIRED</th>
-                <td>{{ $serie->firstaired ? $serie->firstaired->format('M d, Y') : 'Unknown' }}</td>
+                <td>{{ $serie->getFirstAiredDate()?->format('M d, Y') ?? 'Unknown' }}</td>
             </tr>
             <tr>
                 <th>GENRE</th>

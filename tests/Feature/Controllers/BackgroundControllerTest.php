@@ -20,6 +20,7 @@ it('returns a random serie with fanart', function () {
         ->assertJson([
             'name' => 'Breaking Bad',
             'fanart' => 'https://image.tmdb.org/t/p/original/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg',
+            'year' => 2008,
         ]);
 });
 

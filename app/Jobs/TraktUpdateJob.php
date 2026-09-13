@@ -116,7 +116,7 @@ class TraktUpdateJob implements ShouldQueue
                 // Fetch summary only to check updated_at timestamp
                 $newSerie = $trakt->serie((string) $serie->trakt_id, null, true);
                 $timeUpdated = strtotime($newSerie['updated_at'] ?? '');
-                $serieLastUpdated = is_string($serie->lastupdated)
+                $serieLastUpdated = $serie->lastupdated
                     ? strtotime($serie->lastupdated)
                     : 0;
 

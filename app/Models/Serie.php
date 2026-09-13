@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $airs_time Time the show airs (e.g. "21:00", max 15 chars)
  * @property string|null $timezone Timezone for air schedule (max 30 chars)
  * @property string|null $contentrating Content rating (e.g. "TV-MA", max 20 chars)
- * @property \Carbon\Carbon|null $firstaired Date of first episode airing
+ * @property int|null $firstaired First air date as Unix epoch milliseconds
  * @property string|null $genre Pipe-separated genres (e.g. "drama|thriller", max 50 chars)
  * @property string|null $country Country of origin (max 50 chars)
  * @property string|null $language Primary language (max 50 chars)
@@ -32,11 +32,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $ratingcount Number of ratings
  * @property int|null $runtime Episode runtime in minutes
  * @property string|null $status Show status: "continuing", "ended", etc. (max 50 chars)
- * @property \Carbon\Carbon|null $added Date the series was added to favorites
+ * @property int|null $added Time added to favorites as Unix epoch milliseconds
  * @property string|null $addedby How the series was added (max 50 chars)
  * @property string|null $fanart Fanart image URL (max 150 chars), indexed
  * @property string|null $poster Poster image URL (max 150 chars)
- * @property int|null $lastupdated Last updated timestamp (milliseconds)
+ * @property string|null $lastupdated Trakt updated_at ISO 8601 timestamp
  * @property int|null $lastfetched Last fetched from API timestamp (milliseconds)
  * @property int|null $nextupdate Next scheduled update timestamp (milliseconds)
  * @property bool $displaycalendar Whether to show this series on the calendar (default: true)
@@ -72,8 +72,11 @@ class Serie extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'firstaired' => 'date',
-        'added' => 'date',
+        'firstaired' => 'integer',
+        'added' => 'integer',
+        'lastupdated' => 'string',
+        'lastfetched' => 'integer',
+        'nextupdate' => 'integer',
         'displaycalendar' => 'boolean',
         'autoDownload' => 'boolean',
         'watched' => 'boolean',
@@ -102,6 +105,18 @@ class Serie extends Model
     }
 
     // ─── Computed Properties ────────────────────────────────────
+
+    /**
+     * Convert the persisted millisecond timestamp to a presentation date.
+     */
+    public function getFirstAiredDate(): ?\Carbon\Carbon
+    {
+        if (! $this->firstaired) {
+            return null;
+        }
+
+        return \Carbon\Carbon::createFromTimestampMs($this->firstaired);
+    }
 
     /**
      * Count total episodes for this series.

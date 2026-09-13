@@ -28,6 +28,21 @@ it('can create a serie with all fields', function () {
         ->and($serie->autoDownload)->toBeTrue();
 });
 
+it('keeps legacy series timestamps as milliseconds and exposes presentation dates explicitly', function () {
+    $serie = Serie::create([
+        'name' => 'Legacy Time',
+        'trakt_id' => 42,
+        'firstaired' => 1200787200000,
+        'added' => 1700000000000,
+        'lastupdated' => '2024-01-01T00:00:00.000Z',
+    ])->fresh();
+
+    expect($serie->firstaired)->toBe(1200787200000)
+        ->and($serie->added)->toBe(1700000000000)
+        ->and($serie->lastupdated)->toBe('2024-01-01T00:00:00.000Z')
+        ->and($serie->getFirstAiredDate()?->toIso8601String())->toBe('2008-01-20T00:00:00+00:00');
+});
+
 it('strips "The" prefix in getSortName', function () {
     $serie = Serie::create(['name' => 'The Walking Dead', 'trakt_id' => 1]);
     expect($serie->getSortName())->toBe('Walking Dead');
