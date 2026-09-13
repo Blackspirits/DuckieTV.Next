@@ -1,0 +1,35 @@
+name: PR34 Diagnostics
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, bcmath, sqlite3, zip
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Show Pint diff
+        run: |
+          ./vendor/bin/pint app/Services/BackupService.php --test -v || true
+          ./vendor/bin/pint app/Services/BackupService.php
+          echo '===PINT_FORMATTED_FILE_BEGIN==='
+          cat app/Services/BackupService.php
+          echo '===PINT_FORMATTED_FILE_END==='
+
+      - name: Show Larastan regressions
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=table
