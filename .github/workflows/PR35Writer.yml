@@ -2,9 +2,8 @@ name: PR35 Wipe Contract Writer
 
 on:
   push:
-    branches: [audit/tmp-pr35-writer]
-  pull_request:
-    branches: [master]
+    branches:
+      - 'audit/tmp-pr35-writer'
 
 permissions:
   contents: write
@@ -63,7 +62,6 @@ jobs:
                 ->delete();
         });
 
-        // Discard values cached before the destructive database operation.
         $this->settings->restore();
     }
 
@@ -84,7 +82,7 @@ jobs:
 
           replace('app/Http/Controllers/SettingsController.php',
               "            // Optional: Wipe database logic here if requested\n            if ($request->boolean('wipe')) {\n                // TODO: Implement wipe logic (Series::truncate(), Episode::truncate(), etc.)\n                // For now, we just proceed with restore which upserts/overwrites.\n            }\n\n            // Delegate to BackupService via Job for async processing\n            \\App\\Jobs\\RestoreBackupJob::dispatch($data);",
-              "            // Delegate to BackupService via Job for async processing. The job owns\n            // the destructive wipe so wipe -> settings -> series remains one ordered flow.\n            \\App\\Jobs\\RestoreBackupJob::dispatch($data, $request->boolean('wipe'));")
+              "            // The job owns the destructive wipe so wipe -> settings -> series\n            // remains one ordered restore flow.\n            \\App\\Jobs\\RestoreBackupJob::dispatch($data, $request->boolean('wipe'));")
 
           replace('tests/Feature/Jobs/RestoreBackupJobTest.php',
               "        $mockService = Mockery::mock(BackupService::class);\n        $mockService->shouldReceive('restore')->once();",
