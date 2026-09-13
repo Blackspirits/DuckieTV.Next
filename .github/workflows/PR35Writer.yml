@@ -1,0 +1,162 @@
+name: PR35 Wipe Contract Writer
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: audit/pr-35-database-wipe-contract
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, zip, curl, fileinfo, bcmath, xml, dom, ctype, tokenizer
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Apply wipe-before-restore contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {path}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace('app/Services/BackupService.php',
+              "use App\\Models\\Jackett;\nuse App\\Models\\Serie;\nuse Illuminate\\Support\\Facades\\Log;",
+              "use App\\Models\\Jackett;\nuse App\\Models\\Season;\nuse App\\Models\\Serie;\nuse App\\Models\\Setting;\nuse Illuminate\\Support\\Facades\\DB;\nuse Illuminate\\Support\\Facades\\Log;")
+
+          marker = "    /**\n     * Restore from a backup data array."
+          method = """    /**
+     * Remove user library data before a restore while preserving the same
+     * protected local settings as the historical DuckieTV wipe flow.
+     */
+    public function wipeForRestore(): void
+    {
+        DB::transaction(function (): void {
+            Episode::query()->delete();
+            Season::query()->delete();
+            Serie::query()->delete();
+            Jackett::query()->delete();
+
+            Setting::query()
+                ->whereNotIn('key', ['database.version', 'utorrent.token'])
+                ->delete();
+        });
+
+        // Discard values cached before the destructive database operation.
+        $this->settings->restore();
+    }
+
+"""
+          p = Path('app/Services/BackupService.php')
+          text = p.read_text()
+          if marker not in text:
+              raise SystemExit('backup restore marker not found')
+          p.write_text(text.replace(marker, method + marker, 1))
+
+          replace('app/Jobs/RestoreBackupJob.php',
+              "    public function __construct(\n        protected array $backupData\n    ) {}",
+              "    public function __construct(\n        protected array $backupData,\n        protected bool $wipeBeforeImport = false\n    ) {}")
+
+          replace('app/Jobs/RestoreBackupJob.php',
+              "        try {\n            // 1. Restore Settings First (Fast, Synchronous)",
+              "        try {\n            if ($this->wipeBeforeImport) {\n                $backupService->wipeForRestore();\n\n                $data = Cache::get('backup_progress', ['logs' => []]);\n                $data['logs'][] = date('H:i:s').' - Existing library and settings wiped.';\n                Cache::put('backup_progress', $data);\n            }\n\n            // 1. Restore Settings First (Fast, Synchronous)")
+
+          replace('app/Http/Controllers/SettingsController.php',
+              "            // Optional: Wipe database logic here if requested\n            if ($request->boolean('wipe')) {\n                // TODO: Implement wipe logic (Series::truncate(), Episode::truncate(), etc.)\n                // For now, we just proceed with restore which upserts/overwrites.\n            }\n\n            // Delegate to BackupService via Job for async processing\n            \\App\\Jobs\\RestoreBackupJob::dispatch($data);",
+              "            // Delegate to BackupService via Job for async processing. The job owns\n            // the destructive wipe so wipe -> settings -> series remains one ordered flow.\n            \\App\\Jobs\\RestoreBackupJob::dispatch($data, $request->boolean('wipe'));")
+
+          replace('tests/Feature/Jobs/RestoreBackupJobTest.php',
+              "        $mockService = Mockery::mock(BackupService::class);\n        $mockService->shouldReceive('restore')->once();",
+              "        $mockService = Mockery::mock(BackupService::class);\n        $mockService->shouldReceive('wipeForRestore')->once()->ordered();\n        $mockService->shouldReceive('restore')->once()->ordered();")
+          replace('tests/Feature/Jobs/RestoreBackupJobTest.php',
+              "        $job = new RestoreBackupJob($data);",
+              "        $job = new RestoreBackupJob($data, true);")
+
+          replace('tests/Feature/Services/BackupRoundTripTest.php',
+              "use App\\Models\\Jackett;\nuse App\\Models\\Serie;",
+              "use App\\Models\\Jackett;\nuse App\\Models\\Season;\nuse App\\Models\\Serie;\nuse App\\Models\\Setting;")
+
+          marker = "    public function test_legacy_tvdb_key_is_resolved_before_fetching_series(): void"
+          test = """    public function test_wipe_for_restore_preserves_only_historical_protected_settings(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('database.version', '25');
+        $settings->set('utorrent.token', 'keep-me');
+        $settings->set('torrenting.client', 'Transmission');
+
+        $serie = Serie::create(['name' => 'Wipe Me', 'trakt_id' => 7001]);
+        $season = Season::create(['serie_id' => $serie->id, 'seasonnumber' => 1]);
+        Episode::create([
+            'serie_id' => $serie->id,
+            'season_id' => $season->id,
+            'seasonnumber' => 1,
+            'episodenumber' => 1,
+            'trakt_id' => 7101,
+        ]);
+        Jackett::create(['name' => 'Wipe Indexer']);
+
+        $service = new BackupService(
+            $settings,
+            Mockery::mock(FavoritesService::class),
+            Mockery::mock(TraktService::class)
+        );
+
+        $service->wipeForRestore();
+
+        $this->assertSame(0, Serie::query()->count());
+        $this->assertSame(0, Season::query()->count());
+        $this->assertSame(0, Episode::query()->count());
+        $this->assertSame(0, Jackett::query()->count());
+        $this->assertDatabaseHas('settings', ['key' => 'database.version', 'value' => '25']);
+        $this->assertDatabaseHas('settings', ['key' => 'utorrent.token', 'value' => 'keep-me']);
+        $this->assertDatabaseMissing('settings', ['key' => 'torrenting.client']);
+        $this->assertSame('uTorrent', $settings->get('torrenting.client'));
+        $this->assertSame('keep-me', $settings->get('utorrent.token'));
+        $this->assertSame(2, Setting::query()->count());
+    }
+
+"""
+          p = Path('tests/Feature/Services/BackupRoundTripTest.php')
+          text = p.read_text()
+          if marker not in text:
+              raise SystemExit('backup roundtrip test marker not found')
+          p.write_text(text.replace(marker, test + marker, 1))
+          PY
+
+          ./vendor/bin/pint app/Services/BackupService.php app/Jobs/RestoreBackupJob.php app/Http/Controllers/SettingsController.php tests/Feature/Jobs/RestoreBackupJobTest.php tests/Feature/Services/BackupRoundTripTest.php
+
+      - name: Verify Larastan ratchet
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=table
+
+      - name: Verify focused tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test tests/Feature/Jobs/RestoreBackupJobTest.php tests/Feature/Services/BackupRoundTripTest.php
+
+      - name: Push candidate
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/Services/BackupService.php app/Jobs/RestoreBackupJob.php app/Http/Controllers/SettingsController.php tests/Feature/Jobs/RestoreBackupJobTest.php tests/Feature/Services/BackupRoundTripTest.php
+          git commit -m "fix: honor wipe-before-restore contract"
+          git push origin HEAD:audit/pr-35-database-wipe-contract
