@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\RateLimitException;
 use App\Services\FavoritesService;
 use App\Services\SettingsService;
 use App\Services\TraktService;
@@ -44,9 +45,13 @@ class TraktUpdateJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The number of times the job may be attempted.
+     * Rate-limit releases consume reservation attempts, so maxTries must not
+     * cap them. Genuine uncaught failures remain bounded by maxExceptions.
      */
-    public int $tries = 1;
+    public int $tries = 0;
+
+    /** @psalm-suppress PossiblyUnusedProperty Laravel reads this queue payload contract reflectively. */
+    public int $maxExceptions = 1;
 
     /**
      * The maximum number of seconds the job can run.
@@ -64,8 +69,13 @@ class TraktUpdateJob implements ShouldQueue
      */
     public function handle(TraktService $trakt, FavoritesService $favorites, SettingsService $settings): void
     {
-        $this->checkForShowUpdates($trakt, $favorites, $settings);
-        $this->checkForTrendingUpdate($trakt, $settings);
+        try {
+            $this->checkForShowUpdates($trakt, $favorites, $settings);
+            $this->checkForTrendingUpdate($trakt, $settings);
+        } catch (RateLimitException $e) {
+            Log::info("TraktUpdate: Rate limited, releasing for {$e->retryAfter}s.");
+            $this->release($e->retryAfter);
+        }
     }
 
     /**
@@ -130,6 +140,8 @@ class TraktUpdateJob implements ShouldQueue
                 $fullSerie = $trakt->serie((string) $newSerie['trakt_id'], $newSerie);
                 $favorites->addFavorite($fullSerie, [], true);
                 $updatedCount++;
+            } catch (RateLimitException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 Log::error("TraktUpdate: Error updating {$serie->name} [Id={$serie->id}] [Trakt={$serie->trakt_id}]: {$e->getMessage()}");
             }
@@ -184,6 +196,8 @@ class TraktUpdateJob implements ShouldQueue
             $settings->set('trakttv.lastupdated.trending', $nowMs);
 
             Log::info('TraktUpdate: Trending cache updated.');
+        } catch (RateLimitException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('TraktUpdate: Failed to update trending cache: '.$e->getMessage());
         }
