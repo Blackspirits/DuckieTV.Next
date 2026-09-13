@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\TraktUpdateLifecycleService;
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\Windows\WindowMinimized;
@@ -19,6 +20,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     public function boot(): void
     {
         app(AutoDownloadLifecycleService::class)->dispatchStartupMaintenance();
+        app(TraktUpdateLifecycleService::class)->dispatchStartup();
 
         Window::open()
             ->titleBarHidden()

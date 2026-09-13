@@ -20,6 +20,10 @@ class AutoDownloadScheduleTest extends TestCase
             fn ($event): bool => ($event->description ?? null) === 'auto-download:lifecycle'
         );
 
+        $traktUpdate = collect($events)->first(
+            fn ($event): bool => ($event->description ?? null) === 'trakt-update:lifecycle'
+        );
+
         $prune = collect($events)->first(function ($event): bool {
             return str_contains((string) ($event->description ?? ''), PruneAutoDLActivitiesJob::class)
                 || str_contains((string) ($event->command ?? ''), PruneAutoDLActivitiesJob::class);
@@ -30,6 +34,9 @@ class AutoDownloadScheduleTest extends TestCase
 
         $this->assertNotNull($autoDownload, 'Auto-download lifecycle is not registered with the scheduler.');
         $this->assertSame('*/15 * * * *', $autoDownload->expression);
+
+        $this->assertNotNull($traktUpdate, 'Trakt update lifecycle is not registered with the scheduler.');
+        $this->assertSame('* * * * *', $traktUpdate->expression);
 
         $this->assertNotNull($prune, 'PruneAutoDLActivitiesJob is not registered with the scheduler.');
         $this->assertSame('0 0 * * *', $prune->expression);

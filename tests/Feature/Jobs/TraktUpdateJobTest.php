@@ -45,7 +45,8 @@ it('releases on series rate limit without marking the update complete', function
     Cache::forget('trakt_blocked_until');
 
     $settings = app(SettingsService::class);
-    $settings->set('trakttv.lastupdated', 0);
+    $previousShowUpdate = now()->subHours(2)->getTimestampMs();
+    $settings->set('trakttv.lastupdated', $previousShowUpdate);
     $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
 
     Serie::create([
@@ -69,7 +70,7 @@ it('releases on series rate limit without marking the update complete', function
     );
 
     $job->assertReleased(17);
-    expect((int) $settings->get('trakttv.lastupdated'))->toBe(0);
+    expect((int) $settings->get('trakttv.lastupdated'))->toBe($previousShowUpdate);
     Http::assertSentCount(1);
 
     Cache::forget('trakt_blocked_until');
@@ -104,6 +105,38 @@ it('releases on trending rate limit without advancing the trending timestamp', f
     Cache::forget('trakt_blocked_until');
 });
 
+it('matches the historical first run by initializing lastupdated without refreshing favorites', function () {
+    $settings = app(SettingsService::class);
+    $settings->set('trakttv.lastupdated', 0);
+    $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
+
+    Serie::create([
+        'name' => 'First Run Show',
+        'trakt_id' => 4242,
+        'tvdb_id' => 4242,
+        'lastupdated' => '2020-01-01T00:00:00.000Z',
+    ]);
+
+    Http::fake();
+
+    $before = now()->getTimestampMs();
+
+    $job = new TraktUpdateJob;
+    $job->handle(
+        app(TraktService::class),
+        app(FavoritesService::class),
+        $settings,
+    );
+
+    $after = now()->getTimestampMs();
+
+    expect((int) $settings->get('trakttv.lastupdated'))
+        ->toBeGreaterThanOrEqual($before)
+        ->toBeLessThanOrEqual($after);
+
+    Http::assertNothingSent();
+});
+
 it('skips update when recently run', function () {
     $settings = app(SettingsService::class);
     $settings->set('trakttv.lastupdated', now()->getTimestampMs());
@@ -125,7 +158,7 @@ it('skips update when recently run', function () {
 it('updates a favorite show when trakt has newer data', function () {
     $settings = app(SettingsService::class);
     // Set last update to a long time ago
-    $settings->set('trakttv.lastupdated', 0);
+    $settings->set('trakttv.lastupdated', now()->subHours(2)->getTimestampMs());
     // Set trending update to now (skip trending check)
     $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
 
@@ -186,7 +219,7 @@ it('updates a favorite show when trakt has newer data', function () {
 
 it('skips shows that havent been updated on trakt', function () {
     $settings = app(SettingsService::class);
-    $settings->set('trakttv.lastupdated', 0);
+    $settings->set('trakttv.lastupdated', now()->subHours(2)->getTimestampMs());
     $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
 
     Serie::create([
