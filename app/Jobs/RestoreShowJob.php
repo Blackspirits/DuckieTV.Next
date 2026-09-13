@@ -39,7 +39,8 @@ class RestoreShowJob implements ShouldQueue
      */
     public function __construct(
         protected string $seriesId,
-        protected array $backupData
+        protected array $backupData,
+        protected bool $useTraktId = false
     ) {}
 
     /**
@@ -89,7 +90,7 @@ class RestoreShowJob implements ShouldQueue
                 $data['status'] = 'running';
 
                 Cache::put('backup_progress', $data);
-            });
+            }, $this->useTraktId);
 
         } catch (\App\Exceptions\RateLimitException $e) {
             Log::info("RestoreShowJob hit Trakt rate limit for ID {$this->seriesId}, releasing back to queue for {$e->retryAfter}s");

@@ -35,10 +35,11 @@ class BackupServiceTest extends TestCase
         // Service
         $service = new BackupService($settings, $favorites, $trakt);
 
-        // Execute
+        // Execute as a post-1.1.5 Trakt-keyed backup. Legacy TVDB-keyed behavior
+        // is covered separately by BackupRoundTripTest.
         $result = $service->restoreShow($seriesId, $backupData, function ($percent, $msg) {
             // assertions on callback can be done here if needed
-        });
+        }, true);
 
         $this->assertTrue($result);
     }

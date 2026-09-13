@@ -54,9 +54,10 @@ class RestoreBackupJob implements ShouldQueue
 
             // 2. Build Jobs via Generator/Array
             $series = $this->backupData['series'] ?? [];
+            $useTraktId = (bool) ($this->backupData['settings']['useTrakt_id'] ?? false);
             $jobs = [];
             foreach ($series as $id => $seriesData) {
-                $jobs[] = new RestoreShowJob((string) $id, $seriesData);
+                $jobs[] = new RestoreShowJob((string) $id, $seriesData, $useTraktId);
             }
 
             if (empty($jobs)) {
