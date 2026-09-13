@@ -115,8 +115,17 @@ it('adds a favorite show with seasons and episodes', function () {
         ->and($serie->network)->toBe('AMC')
         ->and($serie->status)->toBe('ended')
         ->and($serie->genre)->toBe('drama|thriller')
+        ->and($serie->firstaired)->toBe(1200787200000)
+        ->and($serie->added)->toBeInt()
+        ->and($serie->lastupdated)->toBe('2024-01-01T00:00:00.000Z')
+        ->and($serie->getFirstAiredDate()?->toIso8601String())->toBe('2008-01-20T00:00:00+00:00')
         ->and($serie->actors)->toContain('Bryan Cranston (Walter White)')
         ->and($serie->actors)->toContain('Aaron Paul (Jesse Pinkman)');
+
+    $rawSerie = \Illuminate\Support\Facades\DB::table('series')->where('id', $serie->id)->first();
+    expect((int) $rawSerie->firstaired)->toBe(1200787200000)
+        ->and((int) $rawSerie->added)->toBe($serie->added)
+        ->and($rawSerie->lastupdated)->toBe('2024-01-01T00:00:00.000Z');
 
     // Check seasons created
     expect(Season::where('serie_id', $serie->id)->count())->toBe(1);

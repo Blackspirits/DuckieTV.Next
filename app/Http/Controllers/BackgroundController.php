@@ -29,7 +29,7 @@ class BackgroundController extends Controller
             'id' => $serie->id,
             'name' => $serie->name,
             'fanart' => $serie->fanart,
-            'year' => $serie->firstaired->year,
+            'year' => $serie->getFirstAiredDate()?->year,
         ]);
     }
 }
