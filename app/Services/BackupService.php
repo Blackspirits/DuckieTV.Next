@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Episode;
+use App\Models\Jackett;
+use App\Models\Serie;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -25,6 +28,101 @@ class BackupService
     }
 
     /**
+     * Create a backup using the post-1.1.5 Trakt-ID format from the original
+     * DuckieTV backup contract.
+     *
+     * @return array{settings: array<string, mixed>, series: array<string, array<int, array<string, mixed>>>}
+     */
+    public function createBackup(): array
+    {
+        $settings = $this->settings->all();
+
+        foreach (array_keys($settings) as $key) {
+            if ($this->shouldExcludeSettingFromBackup($key)) {
+                unset($settings[$key]);
+            }
+        }
+
+        $jackettRows = [];
+        foreach (Jackett::query()->orderBy('id')->get() as $jackett) {
+            $jackettRows[] = [
+                'name' => $jackett->name,
+                'torznab' => $jackett->torznab,
+                'enabled' => (int) $jackett->enabled,
+                'torznabEnabled' => (int) $jackett->torznabEnabled,
+                'apiKey' => $jackett->apiKey,
+                'json' => $jackett->json,
+            ];
+        }
+
+        $settings['useTrakt_id'] = true;
+        $settings['jackett'] = json_encode(
+            $jackettRows,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+        );
+
+        $series = [];
+
+        foreach (Serie::query()->whereNotNull('trakt_id')->orderBy('id')->get() as $serie) {
+            $entries = [[
+                'displaycalendar' => (int) $serie->displaycalendar,
+                'autoDownload' => (int) $serie->autoDownload,
+                'customSearchString' => $serie->customSearchString,
+                'ignoreGlobalQuality' => (int) $serie->ignoreGlobalQuality,
+                'ignoreGlobalIncludes' => (int) $serie->ignoreGlobalIncludes,
+                'ignoreGlobalExcludes' => (int) $serie->ignoreGlobalExcludes,
+                'searchProvider' => $serie->searchProvider,
+                'ignoreHideSpecials' => (int) $serie->ignoreHideSpecials,
+                'customSearchSizeMin' => $serie->customSearchSizeMin,
+                'customSearchSizeMax' => $serie->customSearchSizeMax,
+                'dlPath' => $serie->dlPath,
+                'customDelay' => $serie->customDelay,
+                'alias' => $serie->alias,
+                'customFormat' => $serie->customFormat,
+                'customIncludes' => $serie->customIncludes,
+                'customExcludes' => $serie->customExcludes,
+                'customSeeders' => $serie->customSeeders,
+            ]];
+
+            foreach ($serie->episodes()->orderBy('id')->get() as $episode) {
+                if ((int) $episode->downloaded !== 1 && $episode->watchedAt === null) {
+                    continue;
+                }
+
+                $entry = [
+                    'watchedAt' => $episode->watchedAt,
+                    'downloaded' => (int) $episode->downloaded,
+                ];
+
+                if ($episode->trakt_id) {
+                    $entry['TRAKT_ID'] = (int) $episode->trakt_id;
+                } elseif ($episode->tvdb_id) {
+                    $entry['TVDB_ID'] = (int) $episode->tvdb_id;
+                } else {
+                    continue;
+                }
+
+                $entries[] = $entry;
+            }
+
+            $series[(string) $serie->trakt_id] = $entries;
+        }
+
+        return [
+            'settings' => $settings,
+            'series' => $series,
+        ];
+    }
+
+    private function shouldExcludeSettingFromBackup(string $key): bool
+    {
+        return str_contains($key, 'database.version')
+            || str_contains($key, 'trakttv.trending.cache')
+            || str_contains($key, 'trakttv.lastupdated.trending')
+            || str_starts_with($key, 'snrt.');
+    }
+
+    /**
      * Restore from a backup data array.
      *
      * @param  array  $data  Parsed JSON backup data
@@ -45,6 +143,7 @@ class BackupService
                 $onProgress(5, 'Restoring application settings...');
             }
 
+            $this->restoreJackettSettings($data['settings']);
             $this->settings->restoreSettings($data['settings']);
 
             if ($onProgress) {
@@ -57,7 +156,9 @@ class BackupService
             if ($onProgress) {
                 $onProgress(10, 'Starting series restoration...');
             }
-            $stats['series_restored'] = $this->restoreSeries($data['series'], $onProgress);
+
+            $useTraktId = (bool) ($data['settings']['useTrakt_id'] ?? false);
+            $stats['series_restored'] = $this->restoreSeries($data['series'], $onProgress, $useTraktId);
         }
 
         if ($onProgress) {
@@ -75,27 +176,44 @@ class BackupService
      * single-writer model, a long-held transaction blocks all other writers
      * (including the queue worker trying to reserve/complete jobs).
      *
-     * The actual database writes use short, targeted transactions per operation
-     * (each model save() is its own implicit transaction). This keeps lock
-     * durations minimal and prevents "database is locked" errors.
+     * The favorite graph itself is persisted atomically by FavoritesService.
+     * Network resolution/fetching remains outside that SQLite write transaction.
      *
-     * @param  string  $id  Series ID (Trakt/TVDB)
+     * @param  string  $id  Series ID from the backup key
      * @param  array  $backupData  The array of watched episodes + custom settings
+     * @param  bool  $useTraktId  True for post-1.1.5 backups; false for legacy TVDB-keyed backups
      * @return bool Success
      */
-    public function restoreShow(string $id, array $backupData, ?callable $onProgress = null): bool
+    public function restoreShow(
+        string $id,
+        array $backupData,
+        ?callable $onProgress = null,
+        bool $useTraktId = false
+    ): bool
     {
         try {
             if ($onProgress) {
                 $onProgress(0, "Fetching data for series ID: {$id}...");
             }
 
-            // 1. Fetch Trakt Data OUTSIDE any transaction
-            //    This is a network call that can take seconds - we must NOT hold
-            //    a database lock while waiting for the network response.
-            $traktData = $this->trakt->withThrottling(
-                fn (): array => $this->trakt->serie((string) $id)
-            );
+            // 1. Resolve legacy TVDB-keyed backups when needed and fetch Trakt
+            //    data OUTSIDE any database transaction.
+            $traktData = $this->trakt->withThrottling(function () use ($id, $useTraktId): array {
+                $traktId = $id;
+
+                if (! $useTraktId) {
+                    $resolved = $this->trakt->resolveID($id, false);
+                    $resolvedTraktId = $resolved['trakt_id'] ?? null;
+
+                    if (! is_numeric($resolvedTraktId)) {
+                        throw new \RuntimeException("Unable to resolve TVDB series ID {$id} to Trakt.");
+                    }
+
+                    $traktId = (string) $resolvedTraktId;
+                }
+
+                return $this->trakt->serie($traktId);
+            });
             $name = $traktData['title'] ?? "Series #{$id}";
 
             if ($onProgress) {
@@ -105,9 +223,8 @@ class BackupService
             $customSettings = $backupData[0] ?? [];
             $watchedData = $backupData;
 
-            // 2. Write to database - each save() is its own implicit transaction.
-            //    addFavorite() calls serie->save(), season->save(), episode->save()
-            //    individually, which keeps each write lock very short.
+            // 2. Persist the favorite graph atomically. FavoritesService keeps
+            //    this local transaction separate from the network work above.
             $serie = $this->favorites->addFavorite($traktData, $watchedData, false, function ($processed, $totalEpisodes, $season) use ($onProgress, $name) {
                 if ($onProgress) {
                     $percent = $totalEpisodes > 0 ? round(($processed / $totalEpisodes) * 90) : 0;
@@ -152,7 +269,11 @@ class BackupService
      * DEPRECATED: Use restoreShow via Jobs instead for large backups.
      * Keeping for synchronous fallback if needed.
      */
-    private function restoreSeries(array $seriesMap, ?callable $onProgress = null): int
+    private function restoreSeries(
+        array $seriesMap,
+        ?callable $onProgress = null,
+        bool $useTraktId = false
+    ): int
     {
         $count = 0;
         $total = count($seriesMap);
@@ -162,13 +283,18 @@ class BackupService
             $current++;
             $progress = 10 + (int) (($current / $total) * 85);
             try {
-                $this->restoreShow((string) $id, $backupData, function ($p, $msg) use ($onProgress, $progress) {
-                    // Adapt single-show progress to global progress check if needed
-                    // For now we just pass the main message up
-                    if ($onProgress && is_string($msg)) {
-                        $onProgress($progress, $msg);
-                    }
-                });
+                $this->restoreShow(
+                    (string) $id,
+                    $backupData,
+                    function ($p, $msg) use ($onProgress, $progress) {
+                        // Adapt single-show progress to global progress check if needed
+                        // For now we just pass the main message up
+                        if ($onProgress && is_string($msg)) {
+                            $onProgress($progress, $msg);
+                        }
+                    },
+                    $useTraktId
+                );
                 $count++;
             } catch (\Exception $e) {
                 // Continue with next
@@ -178,19 +304,74 @@ class BackupService
         return $count;
     }
 
-    private function applyCustomSettings(\App\Models\Serie $serie, array $settings): void
+    private function restoreJackettSettings(array $settings): void
     {
-        // Backup keys map 1:1 to camelCase column names in the series table.
-        // 'displaymode' is not a column — it was a UI-only setting in Angular DuckieTV.
+        if (! array_key_exists('jackett', $settings)) {
+            return;
+        }
+
+        $rows = $settings['jackett'];
+        if (is_string($rows)) {
+            $rows = json_decode($rows, true);
+        }
+
+        if (! is_array($rows)) {
+            Log::warning('BackupService: Ignoring invalid Jackett backup payload.');
+
+            return;
+        }
+
+        foreach ($rows as $row) {
+            if (! is_array($row) || empty($row['name'])) {
+                continue;
+            }
+
+            $json = $row['json'] ?? null;
+            if (is_string($json)) {
+                $decoded = json_decode($json, true);
+                $json = json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+            }
+
+            Jackett::updateOrCreate(
+                ['name' => (string) $row['name']],
+                [
+                    'torznab' => $row['torznab'] ?? null,
+                    'enabled' => (int) ($row['enabled'] ?? 0),
+                    'torznabEnabled' => (int) ($row['torznabEnabled'] ?? 0),
+                    'apiKey' => $row['apiKey'] ?? null,
+                    'json' => is_array($json) ? $json : null,
+                ]
+            );
+        }
+    }
+
+    private function applyCustomSettings(Serie $serie, array $settings): void
+    {
+        // Post-1.1.4 backup keys map directly to the persisted series columns.
+        // Use array_key_exists so a backup can deliberately restore nullable fields to null.
         $map = [
+            'displaycalendar' => 'displaycalendar',
             'autoDownload' => 'autoDownload',
             'customSearchString' => 'customSearchString',
             'ignoreGlobalQuality' => 'ignoreGlobalQuality',
+            'ignoreGlobalIncludes' => 'ignoreGlobalIncludes',
+            'ignoreGlobalExcludes' => 'ignoreGlobalExcludes',
+            'searchProvider' => 'searchProvider',
+            'ignoreHideSpecials' => 'ignoreHideSpecials',
+            'customSearchSizeMin' => 'customSearchSizeMin',
+            'customSearchSizeMax' => 'customSearchSizeMax',
+            'dlPath' => 'dlPath',
+            'customDelay' => 'customDelay',
+            'alias' => 'alias',
+            'customFormat' => 'customFormat',
+            'customIncludes' => 'customIncludes',
+            'customExcludes' => 'customExcludes',
+            'customSeeders' => 'customSeeders',
         ];
 
         $dirty = false;
         foreach ($map as $backupKey => $modelKey) {
-            if (isset($settings[$backupKey])) {
+            if (array_key_exists($backupKey, $settings)) {
                 $serie->$modelKey = $settings[$backupKey];
                 $dirty = true;
             }

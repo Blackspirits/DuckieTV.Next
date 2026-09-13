@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers;
 
 use App\Jobs\RestoreBackupJob;
+use App\Models\Serie;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,6 +16,30 @@ use Tests\TestCase;
 class SettingsControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_manual_backup_endpoint_downloads_json(): void
+    {
+        Serie::create([
+            'name' => 'Export Me',
+            'trakt_id' => 123,
+            'customSearchString' => 'PROPER 1080p',
+        ]);
+
+        $response = $this->get(route('settings.backup-export'));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/json');
+
+        $this->assertStringContainsString(
+            'attachment; filename="DuckieTV ',
+            (string) $response->headers->get('content-disposition')
+        );
+
+        $data = json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertTrue($data['settings']['useTrakt_id']);
+        $this->assertSame('PROPER 1080p', $data['series']['123'][0]['customSearchString']);
+    }
 
     public function test_restore_endpoint_dispatches_job()
     {

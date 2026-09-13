@@ -712,7 +712,6 @@
   </file>
   <file src="app/Services/SettingsService.php">
     <PossiblyUnusedMethod>
-      <code><![CDATA[all]]></code>
       <code><![CDATA[getDefaults]]></code>
       <code><![CDATA[persist]]></code>
     </PossiblyUnusedMethod>
@@ -1140,7 +1139,6 @@
       <code><![CDATA[markEpisodeWatched]]></code>
       <code><![CDATA[markEpisodesWatched]]></code>
       <code><![CDATA[removeShowFromCollection]]></code>
-      <code><![CDATA[resolveID]]></code>
       <code><![CDATA[userShows]]></code>
       <code><![CDATA[watched]]></code>
     </PossiblyUnusedMethod>
