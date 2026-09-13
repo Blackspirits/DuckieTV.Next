@@ -81,6 +81,44 @@ class AutoDownloadLifecycleServiceTest extends TestCase
         ]);
 
         $this->assertFalse($this->lifecycle->dispatchIfEligible());
+        $this->assertNull(
+            DB::table('jobs')
+                ->where('queue', AutoDownloadLifecycleService::QUEUE)
+                ->value('reserved_at')
+        );
+        $this->assertSame(
+            1,
+            (int) DB::table('jobs')
+                ->where('queue', AutoDownloadLifecycleService::QUEUE)
+                ->value('attempts')
+        );
+        Queue::assertNotPushed(AutoDownloadJob::class);
+    }
+
+    public function test_fresh_reserved_auto_download_row_is_not_released(): void
+    {
+        Queue::fake();
+        $this->settings->set('torrenting.enabled', true);
+        $this->settings->set('torrenting.autodownload', true);
+
+        $reservedAt = now()->subSeconds(AutoDownloadLifecycleService::RECOVERY_AFTER_SECONDS - 1)->timestamp;
+
+        DB::table('jobs')->insert([
+            'queue' => AutoDownloadLifecycleService::QUEUE,
+            'payload' => '{}',
+            'attempts' => 1,
+            'reserved_at' => $reservedAt,
+            'available_at' => now()->subMinute()->timestamp,
+            'created_at' => now()->subMinute()->timestamp,
+        ]);
+
+        $this->assertFalse($this->lifecycle->dispatchIfEligible());
+        $this->assertSame(
+            $reservedAt,
+            (int) DB::table('jobs')
+                ->where('queue', AutoDownloadLifecycleService::QUEUE)
+                ->value('reserved_at')
+        );
         Queue::assertNotPushed(AutoDownloadJob::class);
     }
 

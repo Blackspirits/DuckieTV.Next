@@ -43,11 +43,13 @@ class AutoDownloadCrashRecoveryTest extends TestCase
         $this->assertSame(1, DB::table('cache_locks')->count());
 
         // Simulate the worker process dying and the app remaining unavailable
-        // beyond both retry_after (90s) and the finite uniqueness lease (120s).
+        // beyond the dedicated AutoDL recovery boundary and uniqueness lease.
         DB::table('jobs')
             ->where('queue', AutoDownloadLifecycleService::QUEUE)
             ->update(['reserved_at' => now()->subSeconds(121)->timestamp]);
         DB::table('cache_locks')->update(['expiration' => now()->subSecond()->timestamp]);
+
+        $this->assertSame(1, $lifecycle->recoverExpiredReservation());
 
         // Startup/reconnect must preserve the persisted stale row as the one
         // recovery unit instead of creating a second job with a new lock owner.
@@ -97,7 +99,9 @@ class AutoDownloadCrashRecoveryTest extends TestCase
             ->update(['reserved_at' => now()->subSeconds(121)->timestamp]);
         DB::table('cache_locks')->update(['expiration' => now()->subSecond()->timestamp]);
 
-        // Even after retry_after and uniqueFor have expired, the persisted row
+        $this->assertSame(1, $lifecycle->recoverExpiredReservation());
+
+        // Even after the AutoDL recovery boundary and uniqueFor have expired, the persisted row
         // remains the sole recovery unit and blocks a competing lifecycle dispatch.
         $this->assertFalse($lifecycle->dispatchIfEligible());
         $this->assertSame(1, DB::table('jobs')->where('queue', AutoDownloadLifecycleService::QUEUE)->count());
@@ -113,6 +117,7 @@ class AutoDownloadCrashRecoveryTest extends TestCase
             ->update(['reserved_at' => now()->subSeconds(121)->timestamp]);
         DB::table('cache_locks')->update(['expiration' => now()->subSecond()->timestamp]);
 
+        $this->assertSame(1, $lifecycle->recoverExpiredReservation());
         $this->assertFalse($lifecycle->dispatchIfEligible());
         $this->assertSame(1, DB::table('jobs')->where('queue', AutoDownloadLifecycleService::QUEUE)->count());
         $this->assertSame(0, DB::table('failed_jobs')->count());
