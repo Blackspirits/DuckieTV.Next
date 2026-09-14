@@ -251,14 +251,10 @@ class SettingsController extends Controller
                 ], 422);
             }
 
-            // Optional: Wipe database logic here if requested
-            if ($request->boolean('wipe')) {
-                // TODO: Implement wipe logic (Series::truncate(), Episode::truncate(), etc.)
-                // For now, we just proceed with restore which upserts/overwrites.
-            }
-
-            // Delegate to BackupService via Job for async processing
-            \App\Jobs\RestoreBackupJob::dispatch($data);
+            // Delegate to BackupService via Job for async processing.
+            // Wiping happens inside the queued job so wipe -> settings restore -> series
+            // dispatch is one ordered background workflow.
+            \App\Jobs\RestoreBackupJob::dispatch($data, $request->boolean('wipe'));
 
             return response()->json([
                 'success' => true,
