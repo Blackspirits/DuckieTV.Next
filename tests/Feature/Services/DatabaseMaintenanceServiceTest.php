@@ -8,16 +8,18 @@ use App\Models\Jackett;
 use App\Models\Season;
 use App\Models\Serie;
 use App\Services\DatabaseMaintenanceService;
+use App\Services\FavoritesService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Mockery;
 use Tests\TestCase;
 
 class DatabaseMaintenanceServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_wipe_for_restore_deletes_user_state_and_preserves_protected_settings_and_infrastructure(): void
+    public function test_wipe_user_database_deletes_user_state_and_preserves_protected_settings_and_infrastructure(): void
     {
         $settings = app(SettingsService::class);
         $settings->set('database.version', '42');
@@ -93,10 +95,15 @@ class DatabaseMaintenanceServiceTest extends TestCase
 
         $migrationCount = DB::table('migrations')->count();
 
-        // Prime the singleton cache so this proves the wipe reloads it.
+        // Prime singleton state so this proves the wipe refreshes all
+        // settings-derived state used by later restore work.
         $this->assertSame('Transmission', $settings->get('torrenting.client'));
 
-        app(DatabaseMaintenanceService::class)->wipeForRestore();
+        $favorites = Mockery::mock(FavoritesService::class);
+        $favorites->shouldReceive('resetCachedSettings')->once();
+        $this->app->instance(FavoritesService::class, $favorites);
+
+        app(DatabaseMaintenanceService::class)->wipeUserDatabase();
 
         $this->assertDatabaseCount('autodl_activities', 0);
         $this->assertDatabaseCount('episodes', 0);

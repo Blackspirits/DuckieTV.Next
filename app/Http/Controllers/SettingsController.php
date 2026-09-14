@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Settings\ShowSettingsRequest;
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\DatabaseMaintenanceLock;
+use App\Services\DatabaseMaintenanceService;
 use App\Services\TorrentClientService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
@@ -230,14 +232,57 @@ class SettingsController extends Controller
     }
 
     /**
+     * Wipe DuckieTV user data using the same historical contract as
+     * wipe-before-restore.
+     */
+    public function wipe(
+        DatabaseMaintenanceService $databaseMaintenance,
+        DatabaseMaintenanceLock $maintenanceLock
+    ) {
+        $lockOwner = $maintenanceLock->acquire();
+
+        if ($lockOwner === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ], 409);
+        }
+
+        try {
+            $databaseMaintenance->wipeUserDatabase();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Database wiped successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Database wipe failed.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Database wipe failed.',
+            ], 500);
+        } finally {
+            $maintenanceLock->release($lockOwner);
+        }
+    }
+
+    /**
      * Restore backup from file.
      */
-    public function restore(\Illuminate\Http\Request $request)
-    {
+    public function restore(
+        \Illuminate\Http\Request $request,
+        DatabaseMaintenanceLock $maintenanceLock
+    ) {
         $request->validate([
             'backup_file' => 'required|file|mimetypes:application/json,text/plain|max:10240', // 10MB max
             'wipe' => 'sometimes|boolean',
         ]);
+
+        $lockOwner = null;
 
         try {
             $file = $request->file('backup_file');
@@ -251,10 +296,31 @@ class SettingsController extends Controller
                 ], 422);
             }
 
+            $lockOwner = $maintenanceLock->acquire();
+
+            if ($lockOwner === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Another database maintenance operation is already running.',
+                ], 409);
+            }
+
+            \Illuminate\Support\Facades\Cache::put('backup_progress', [
+                'percent' => 0,
+                'status' => 'queued',
+                'message' => 'Restore queued...',
+                'logs' => [],
+                'show_progress' => null,
+                'batch_id' => null,
+            ]);
+
             // Delegate to BackupService via Job for async processing.
-            // Wiping happens inside the queued job so wipe -> settings restore -> series
-            // dispatch is one ordered background workflow.
-            \App\Jobs\RestoreBackupJob::dispatch($data, $request->boolean('wipe'));
+            // The maintenance lock remains owned until the restore batch finishes.
+            \App\Jobs\RestoreBackupJob::dispatch(
+                $data,
+                $request->boolean('wipe'),
+                $lockOwner
+            );
 
             return response()->json([
                 'success' => true,
@@ -262,12 +328,28 @@ class SettingsController extends Controller
                 'status' => 'started',
             ]);
 
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Restore failed: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            if ($lockOwner !== null) {
+                $maintenanceLock->release($lockOwner);
+
+                \Illuminate\Support\Facades\Cache::put('backup_progress', [
+                    'percent' => 0,
+                    'status' => 'failed',
+                    'message' => 'Restore failed to start.',
+                    'logs' => [],
+                    'show_progress' => null,
+                    'batch_id' => null,
+                ]);
+            }
+
+            \Illuminate\Support\Facades\Log::error('Restore dispatch failed.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Restore failed: '.$e->getMessage(),
+                'message' => 'Restore failed to start.',
             ], 500);
         }
     }
@@ -302,7 +384,7 @@ class SettingsController extends Controller
             if ($batch) {
                 $batch->cancel();
 
-                $progress['status'] = 'cancelled';
+                $progress['status'] = 'cancelling';
                 $progress['message'] = 'Cancellation requested...';
                 $progress['logs'][] = date('H:i:s').' - User requested cancellation.';
                 \Illuminate\Support\Facades\Cache::put('backup_progress', $progress);

@@ -57,12 +57,12 @@
 
     <hr class="setting-divider">
 
-    <h2>Wipe Database</h2>
-    <p>This will delete all series, episodes, and settings! Use with caution.</p>
+    <h2>{{ __('COMMON/wipe/hdr') }}</h2>
+    <p>{{ __('SETTINGS/BACKUP/wipe/desc') }}</p>
     <div class="buttons">
-        <a class="btn btn-danger" href="javascript:void(0)" onclick="confirm('Are you sure you want to wipe the database? This cannot be undone!') && alert('Wipe functionality not yet implemented')">
-            <i class="glyphicon glyphicon-trash"></i> <span>Wipe Database</span>
-        </a>
+        <button type="button" class="btn btn-danger" onclick="BackupRestore.wipeDatabase()">
+            <i class="glyphicon glyphicon-trash"></i> <span>{{ __('SETTINGS/BACKUP/wipe/btn') }}</span>
+        </button>
     </div>
 
     <hr class="setting-divider">

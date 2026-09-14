@@ -177,6 +177,8 @@
                 'BACKUPCTRLjs/restore/wipe-warn': '{{ __("BACKUPCTRLjs/restore/wipe-warn") }}',
                 'BACKUPCTRLjs/restore/merge-info': '{{ __("BACKUPCTRLjs/restore/merge-info") }}',
                 'BACKUPCTRLjs/restore/confirm-hdr': '{{ __("BACKUPCTRLjs/restore/confirm-hdr") }}',
+                'COMMON/wipe/hdr': '{{ __("COMMON/wipe/hdr") }}',
+                'BACKUPCTRLjs/wipe/desc': '{{ __("BACKUPCTRLjs/wipe/desc") }}',
                 'COMMON/error/hdr': '{{ __("COMMON/error/hdr") }}',
                 'BACKUPCTRLjs/progress/restore-failed': '{{ __("BACKUPCTRLjs/progress/restore-failed") }}',
                 'BACKUPCTRLjs/progress/hdr': '{{ __("BACKUPCTRLjs/progress/hdr") }}',

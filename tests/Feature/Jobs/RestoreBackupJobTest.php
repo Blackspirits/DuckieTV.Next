@@ -4,6 +4,7 @@ namespace Tests\Feature\Jobs;
 
 use App\Jobs\RestoreBackupJob;
 use App\Services\BackupService;
+use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
@@ -34,10 +35,13 @@ class RestoreBackupJobTest extends TestCase
         ];
 
         $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
-        $maintenance->shouldNotReceive('wipeForRestore');
+        $maintenance->shouldNotReceive('wipeUserDatabase');
 
-        $job = new RestoreBackupJob($data);
-        $job->handle($mockService, $maintenance);
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldNotReceive('release');
+
+        $job = new RestoreBackupJob($data, false, 'restore-owner');
+        $job->handle($mockService, $maintenance, $lock);
 
         // Assert Batch Dispatched
         \Illuminate\Support\Facades\Bus::assertBatched(function (\Illuminate\Bus\PendingBatch $batch) {
@@ -62,16 +66,19 @@ class RestoreBackupJobTest extends TestCase
         Cache::shouldReceive('get')->andReturn(['logs' => [], 'percent' => 0]);
 
         $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
-        $maintenance->shouldReceive('wipeForRestore')->once()->ordered();
+        $maintenance->shouldReceive('wipeUserDatabase')->once()->ordered();
 
         $backupService = Mockery::mock(BackupService::class);
         $backupService->shouldReceive('restore')->once()->ordered();
 
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('release')->once()->with('restore-owner')->ordered();
+
         $job = new RestoreBackupJob([
             'settings' => ['torrenting.client' => 'Transmission'],
             'series' => [],
-        ], true);
+        ], true, 'restore-owner');
 
-        $job->handle($backupService, $maintenance);
+        $job->handle($backupService, $maintenance, $lock);
     }
 }

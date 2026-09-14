@@ -35,6 +35,14 @@ class FavoritesService
     }
 
     /**
+     * Clear settings-derived state after the settings store is reset or restored.
+     */
+    public function resetCachedSettings(): void
+    {
+        $this->downloadRatings = null;
+    }
+
+    /**
      * Lazy accessor for the download.ratings setting.
      */
     private function shouldDownloadRatings(): bool
