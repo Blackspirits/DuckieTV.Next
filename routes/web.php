@@ -67,6 +67,8 @@ Route::prefix('settings')->group(function () {
     Route::get('/', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::get('/backup/export', [\App\Http\Controllers\SettingsController::class, 'downloadBackup'])->name('settings.backup-export');
     Route::post('/wipe', [\App\Http\Controllers\SettingsController::class, 'wipe'])->name('settings.wipe');
+    Route::post('/refresh', [\App\Http\Controllers\SettingsController::class, 'refreshDatabase'])->name('settings.refresh');
+    Route::get('/refresh/progress', [\App\Http\Controllers\SettingsController::class, 'refreshDatabaseProgress'])->name('settings.refresh-progress');
     Route::post('/restore', [\App\Http\Controllers\SettingsController::class, 'restore'])->name('settings.restore');
     Route::get('/restore/progress', [\App\Http\Controllers\SettingsController::class, 'restoreProgress'])->name('settings.restore-progress');
     Route::post('/restore/cancel', [\App\Http\Controllers\SettingsController::class, 'cancelRestore'])->name('settings.restore-cancel');

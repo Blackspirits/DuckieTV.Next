@@ -1,5 +1,6 @@
 window.BackupRestore = {
     pollingInterval: null,
+    refreshPollingInterval: null,
     lastLogCount: 0,
     selectedFile: null,
     progressModal: null,
@@ -15,8 +16,9 @@ window.BackupRestore = {
     init: function (i18n = {}) {
         this.i18n = i18n;
         console.log('BackupRestore: init');
-        // Check if a restore is already in progress
+        // Check if restore/refresh maintenance is already in progress.
         this.checkExistingRestore();
+        this.checkExistingDatabaseRefresh();
     },
 
     checkExistingRestore: function () {
@@ -212,6 +214,107 @@ window.BackupRestore = {
                     alert(`${prefix}: ${error.message}`);
                 });
         });
+    },
+
+    checkExistingDatabaseRefresh: function () {
+        fetch('/settings/refresh/progress')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'queued' || data.status === 'running') {
+                    this.startDatabaseRefreshPolling(data);
+                }
+            })
+            .catch(err => console.error('Database refresh check error:', err));
+    },
+
+    refreshDatabase: function () {
+        const button = document.getElementById('refreshDatabaseButton');
+        if (button) button.disabled = true;
+
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/refresh', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Accept': 'application/json'
+            }
+        })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Database refresh failed to start.');
+                }
+
+                this.startDatabaseRefreshPolling({
+                    status: 'queued',
+                    total: data.total || 0,
+                    processed: 0,
+                    current: null
+                });
+            })
+            .catch(error => {
+                if (button) button.disabled = false;
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+            });
+    },
+
+    startDatabaseRefreshPolling: function (initialData = null) {
+        if (this.refreshPollingInterval) {
+            clearInterval(this.refreshPollingInterval);
+        }
+
+        const data = initialData || {};
+        const total = Number(data.total || 0);
+
+        if (window.QueryMonitor) {
+            window.QueryMonitor.start(total, 'series');
+            window.QueryMonitor.update(Number(data.processed || 0), total, data.current || 'series');
+        }
+
+        const button = document.getElementById('refreshDatabaseButton');
+        if (button) button.disabled = true;
+
+        this.refreshPollingInterval = setInterval(() => {
+            fetch('/settings/refresh/progress')
+                .then(response => response.json())
+                .then(progress => {
+                    const processed = Number(progress.processed || 0);
+                    const progressTotal = Number(progress.total || 0);
+
+                    if (window.QueryMonitor) {
+                        window.QueryMonitor.update(
+                            processed,
+                            progressTotal,
+                            progress.current || 'series'
+                        );
+                    }
+
+                    if (progress.status === 'completed' || progress.status === 'failed') {
+                        clearInterval(this.refreshPollingInterval);
+                        this.refreshPollingInterval = null;
+
+                        if (window.QueryMonitor) {
+                            if (progress.status === 'completed') {
+                                window.QueryMonitor.update(progressTotal, progressTotal, 'series');
+                            }
+                            window.QueryMonitor.finish();
+                        }
+
+                        if (button) button.disabled = false;
+
+                        if (progress.status === 'failed') {
+                            const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                            alert(`${prefix}: ${progress.message || 'Database refresh failed.'}`);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Database refresh polling error:', error);
+                });
+        }, 1000);
     },
 
     clearInput: function () {

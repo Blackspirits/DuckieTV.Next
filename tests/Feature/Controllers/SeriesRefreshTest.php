@@ -2,9 +2,11 @@
 
 use App\Models\Episode;
 use App\Models\Serie;
+use App\Services\DatabaseMaintenanceLock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Mockery;
 
 uses(RefreshDatabase::class);
 
@@ -165,6 +167,33 @@ it('does not expose upstream error bodies as a successful refresh', function () 
         ->assertSessionMissing('status')
         ->assertSessionHas('error', 'Failed to refresh Breaking Bad.');
 
+    expect($serie->fresh()->overview)->toBe('Keep me.');
+});
+
+it('rejects individual refresh while database maintenance is active', function () {
+    $serie = Serie::create([
+        'name' => 'Breaking Bad',
+        'trakt_id' => 1388,
+        'tvdb_id' => 81189,
+        'overview' => 'Keep me.',
+    ]);
+
+    $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+    $lock->shouldReceive('acquire')->once()->andReturn(null);
+    $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+    Http::fake();
+
+    $this
+        ->from(route('series.show', $serie->id))
+        ->put(route('series.refresh', $serie->id))
+        ->assertRedirect(route('series.show', $serie->id))
+        ->assertSessionHas(
+            'error',
+            'Another database maintenance operation is already running.'
+        );
+
+    Http::assertNothingSent();
     expect($serie->fresh()->overview)->toBe('Keep me.');
 });
 

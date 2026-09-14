@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Settings\ShowSettingsRequest;
+use App\Jobs\RefreshDatabaseJob;
+use App\Models\Serie;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
+use App\Services\DatabaseRefreshProgressService;
 use App\Services\TorrentClientService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
@@ -268,6 +271,61 @@ class SettingsController extends Controller
         } finally {
             $maintenanceLock->release($lockOwner);
         }
+    }
+
+    /**
+     * Re-fetch all current favorites from Trakt using the same refresh path
+     * as the per-series action.
+     */
+    public function refreshDatabase(
+        DatabaseMaintenanceLock $maintenanceLock,
+        DatabaseRefreshProgressService $progress
+    ) {
+        $lockOwner = $maintenanceLock->acquire();
+
+        if ($lockOwner === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ], 409);
+        }
+
+        try {
+            $seriesIds = Serie::query()
+                ->whereNotNull('name')
+                ->orderBy('id')
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            $progress->queued(count($seriesIds));
+            RefreshDatabaseJob::dispatch($seriesIds, $lockOwner);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Database refresh started in background.',
+                'status' => 'started',
+                'total' => count($seriesIds),
+            ]);
+        } catch (\Throwable $e) {
+            $maintenanceLock->release($lockOwner);
+            $progress->fail('Database refresh failed to start.');
+
+            \Illuminate\Support\Facades\Log::error('Database refresh dispatch failed.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Database refresh failed to start.',
+            ], 500);
+        }
+    }
+
+    public function refreshDatabaseProgress(DatabaseRefreshProgressService $progress)
+    {
+        return response()->json($progress->get());
     }
 
     /**
