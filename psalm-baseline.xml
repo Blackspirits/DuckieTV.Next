@@ -520,7 +520,6 @@
     </PossiblyUnusedProperty>
     <UnusedClosureParam>
       <code><![CDATA[$batch]]></code>
-      <code><![CDATA[$batch]]></code>
       <code><![CDATA[$m]]></code>
       <code><![CDATA[$p]]></code>
     </UnusedClosureParam>
