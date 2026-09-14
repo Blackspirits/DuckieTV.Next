@@ -1,6 +1,10 @@
 window.BackupRestore = {
     pollingInterval: null,
     refreshPollingInterval: null,
+    autoBackupTimer: null,
+    autoBackupDialog: null,
+    autoBackupState: null,
+    autoBackupObserver: null,
     lastLogCount: 0,
     selectedFile: null,
     progressModal: null,
@@ -19,6 +23,8 @@ window.BackupRestore = {
         // Check if restore/refresh maintenance is already in progress.
         this.checkExistingRestore();
         this.checkExistingDatabaseRefresh();
+        this.observeAutoBackupControls();
+        this.initAutoBackup();
     },
 
     checkExistingRestore: function () {
@@ -214,6 +220,285 @@ window.BackupRestore = {
                     alert(`${prefix}: ${error.message}`);
                 });
         });
+    },
+
+    initAutoBackup: function () {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/autobackup/state', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Accept': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(state => {
+                this.scheduleAutoBackup(state);
+            })
+            .catch(error => console.error('Auto-backup state error:', error));
+    },
+
+    calculateNextAutoBackup: function (state) {
+        if (!state || state.period === 'never' || !state.last_run) {
+            return null;
+        }
+
+        const lastRun = new Date(Number(state.last_run));
+        if (Number.isNaN(lastRun.getTime())) {
+            return null;
+        }
+
+        switch (state.period) {
+            case 'daily':
+                return new Date(
+                    lastRun.getFullYear(),
+                    lastRun.getMonth(),
+                    lastRun.getDate() + 1,
+                    lastRun.getHours(),
+                    lastRun.getMinutes(),
+                    lastRun.getSeconds()
+                ).getTime();
+            case 'weekly':
+                return new Date(
+                    lastRun.getFullYear(),
+                    lastRun.getMonth(),
+                    lastRun.getDate() + 7,
+                    lastRun.getHours(),
+                    lastRun.getMinutes(),
+                    lastRun.getSeconds()
+                ).getTime();
+            case 'monthly':
+                return new Date(
+                    lastRun.getFullYear(),
+                    lastRun.getMonth() + 1,
+                    lastRun.getDate(),
+                    lastRun.getHours(),
+                    lastRun.getMinutes(),
+                    lastRun.getSeconds()
+                ).getTime();
+            default:
+                return null;
+        }
+    },
+
+    scheduleAutoBackup: function (state) {
+        this.autoBackupState = state || null;
+
+        if (this.autoBackupTimer) {
+            clearTimeout(this.autoBackupTimer);
+            this.autoBackupTimer = null;
+        }
+
+        this.syncAutoBackupControls();
+
+        const nextRun = this.calculateNextAutoBackup(this.autoBackupState);
+
+        if (nextRun === null) {
+            return;
+        }
+
+        let delay = nextRun - Date.now();
+        if (delay <= 0) {
+            delay = 60000;
+        }
+
+        // Browser timers cannot safely represent every monthly interval.
+        // Re-check daily until the exact historical local-time deadline is near.
+        const maxTimerDelay = 24 * 60 * 60 * 1000;
+        if (delay > maxTimerDelay) {
+            this.autoBackupTimer = setTimeout(() => this.initAutoBackup(), maxTimerDelay);
+            return;
+        }
+
+        this.autoBackupTimer = setTimeout(() => this.handleAutoBackupDue(), delay);
+    },
+
+    syncAutoBackupControls: function () {
+        const state = this.autoBackupState;
+        if (!state) return;
+
+        const select = document.getElementById('autoBackup');
+        if (select && state.period) {
+            select.value = state.period;
+        }
+
+        const label = document.getElementById('nextAutoBackupDate');
+        if (label) {
+            const nextRun = this.calculateNextAutoBackup(state);
+            label.textContent = nextRun === null ? '' : new Date(nextRun).toString();
+        }
+    },
+
+    observeAutoBackupControls: function () {
+        if (this.autoBackupObserver || !document.body) {
+            return;
+        }
+
+        this.autoBackupObserver = new MutationObserver(mutations => {
+            const relevantControlAdded = mutations.some(mutation =>
+                Array.from(mutation.addedNodes || []).some(node => {
+                    if (!(node instanceof Element)) {
+                        return false;
+                    }
+
+                    return node.matches('#autoBackup, #nextAutoBackupDate')
+                        || Boolean(node.querySelector('#autoBackup, #nextAutoBackupDate'));
+                })
+            );
+
+            if (relevantControlAdded) {
+                this.syncAutoBackupControls();
+            }
+        });
+
+        this.autoBackupObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    },
+
+    handleAutoBackupDue: function () {
+        this.autoBackupTimer = null;
+
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/autobackup/state', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Accept': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(state => {
+                const nextRun = this.calculateNextAutoBackup(state);
+
+                if (nextRun !== null && nextRun > Date.now()) {
+                    this.scheduleAutoBackup(state);
+                    return;
+                }
+
+                if (!state || state.period === 'never') {
+                    this.scheduleAutoBackup(state);
+                    return;
+                }
+
+                if (Number(state.favorites_count || 0) === 0) {
+                    console.info('Auto-backup is not required because there are no favorites.');
+                    return;
+                }
+
+                this.showAutoBackupDialog();
+            })
+            .catch(error => console.error('Auto-backup due check error:', error));
+    },
+
+    showAutoBackupDialog: function () {
+        if (this.autoBackupDialog && this.autoBackupDialog.el) {
+            return;
+        }
+
+        const content = document.createElement('p');
+        content.textContent = this.i18n['COMMON/backup/desc'] || 'Create a backup of your series / episodes / watched list.';
+
+        const footer = document.createDocumentFragment();
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'btn btn-default';
+        cancelButton.textContent = this.i18n['COMMON/cancel/btn'] || 'Cancel';
+
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'btn btn-success';
+        createButton.textContent = this.i18n['COMMON/create/btn'] || 'Create Database Backup';
+
+        footer.appendChild(cancelButton);
+        footer.appendChild(createButton);
+
+        const modal = new Modal({
+            backdrop: true,
+            keyboard: true,
+            size: 'lg'
+        });
+
+        modal.show(
+            this.i18n['COMMON/autobackup/hdr'] || 'Auto-Backup',
+            content,
+            footer,
+            'dialog-header-confirm'
+        );
+
+        cancelButton.addEventListener('click', () => {
+            modal.hide();
+            this.autoBackupDialog = null;
+        });
+
+        createButton.addEventListener('click', () => {
+            modal.hide();
+            this.autoBackupDialog = null;
+            this.createScheduledBackup();
+        });
+
+        this.autoBackupDialog = modal;
+    },
+
+    persistAutoBackupSettings: function (settings) {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        return fetch('/settings/backup', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        }).then(async response => {
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Failed to save auto-backup settings.');
+            }
+
+            return data;
+        });
+    },
+
+    triggerBackupDownload: function () {
+        const link = document.createElement('a');
+        link.href = '/settings/backup/export';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    },
+
+    createScheduledBackup: function () {
+        this.persistAutoBackupSettings({
+            'autobackup.lastrun': Date.now()
+        })
+            .then(() => {
+                this.triggerBackupDownload();
+                this.initAutoBackup();
+            })
+            .catch(error => {
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+            });
+    },
+
+    updateAutoBackupPeriod: function (period) {
+        this.persistAutoBackupSettings({
+            'autobackup.period': period
+        })
+            .then(() => this.initAutoBackup())
+            .catch(error => {
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+            });
     },
 
     checkExistingDatabaseRefresh: function () {

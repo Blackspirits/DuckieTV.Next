@@ -15,6 +15,7 @@ class UpdateBackupSettingsRequest extends FormRequest
     {
         return [
             'autobackup.period' => 'string|in:never,daily,weekly,monthly',
+            'autobackup.lastrun' => 'nullable|integer|min:0',
         ];
     }
 }

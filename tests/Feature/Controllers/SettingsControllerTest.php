@@ -5,6 +5,7 @@ namespace Tests\Feature\Controllers;
 use App\Jobs\RefreshDatabaseJob;
 use App\Jobs\RestoreBackupJob;
 use App\Models\Serie;
+use App\Models\Setting;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
@@ -14,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Carbon;
 use Mockery;
 use Tests\TestCase;
 
@@ -43,6 +45,121 @@ class SettingsControllerTest extends TestCase
 
         $this->assertTrue($data['settings']['useTrakt_id']);
         $this->assertSame('PROPER 1080p', $data['series']['123'][0]['customSearchString']);
+    }
+
+    public function test_auto_backup_state_initializes_last_run_for_active_schedule(): void
+    {
+        Carbon::setTestNow('2026-09-14 17:30:00');
+
+        try {
+            $settings = app(SettingsService::class);
+            $settings->set('autobackup.period', 'daily');
+
+            $expected = now()->getTimestampMs();
+
+            $this->postJson(route('settings.autobackup-state'))
+                ->assertOk()
+                ->assertExactJson([
+                    'period' => 'daily',
+                    'last_run' => $expected,
+                    'favorites_count' => 0,
+                ]);
+
+            $this->assertDatabaseHas('settings', [
+                'key' => 'autobackup.lastrun',
+                'value' => (string) $expected,
+            ]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_auto_backup_state_does_not_initialize_last_run_when_disabled(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('autobackup.period', 'never');
+
+        $this->postJson(route('settings.autobackup-state'))
+            ->assertOk()
+            ->assertExactJson([
+                'period' => 'never',
+                'last_run' => null,
+                'favorites_count' => 0,
+            ]);
+
+        $this->assertNull(Setting::find('autobackup.lastrun'));
+
+        $backup = json_decode(
+            $this->get(route('settings.backup-export'))->getContent(),
+            true,
+            flags: JSON_THROW_ON_ERROR
+        );
+        $this->assertArrayNotHasKey('autobackup.lastrun', $backup['settings']);
+    }
+
+    public function test_auto_backup_state_preserves_existing_last_run_and_counts_favorites(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('autobackup.period', 'weekly');
+        $settings->set('autobackup.lastrun', 1700000000123);
+
+        Serie::create([
+            'name' => 'Scheduled Show',
+            'trakt_id' => 555,
+        ]);
+
+        $this->postJson(route('settings.autobackup-state'))
+            ->assertOk()
+            ->assertExactJson([
+                'period' => 'weekly',
+                'last_run' => 1700000000123,
+                'favorites_count' => 1,
+            ]);
+
+        $backup = json_decode(
+            $this->get(route('settings.backup-export'))->getContent(),
+            true,
+            flags: JSON_THROW_ON_ERROR
+        );
+        $this->assertSame('1700000000123', (string) $backup['settings']['autobackup.lastrun']);
+    }
+
+    public function test_auto_backup_settings_accept_only_historical_periods_and_integer_last_run(): void
+    {
+        $this->postJson(route('settings.update', 'backup'), [
+            'autobackup.period' => 'daily',
+            'autobackup.lastrun' => 1700000000123,
+        ])->assertOk()->assertJson(['success' => true]);
+
+        $settings = app(SettingsService::class);
+        $this->assertSame('daily', $settings->get('autobackup.period'));
+        $this->assertSame('1700000000123', (string) $settings->get('autobackup.lastrun'));
+
+        foreach ([1, 'hourly', 'yearly'] as $invalidPeriod) {
+            $this->postJson(route('settings.update', 'backup'), [
+                'autobackup.period' => $invalidPeriod,
+            ])->assertStatus(422);
+        }
+
+        $this->postJson(route('settings.update', 'backup'), [
+            'autobackup.lastrun' => -1,
+        ])->assertStatus(422);
+    }
+
+    public function test_backup_settings_view_uses_historical_auto_backup_contract(): void
+    {
+        $response = $this->get(route('settings.show', 'backup'));
+
+        $response->assertOk()
+            ->assertSee('BackupRestore.updateAutoBackupPeriod(this.value)', false)
+            ->assertSee('value="never"', false)
+            ->assertSee('value="daily"', false)
+            ->assertSee('value="weekly"', false)
+            ->assertSee('value="monthly"', false)
+            ->assertSee('id="nextAutoBackupDate"', false)
+            ->assertDontSee('Auto-backup setting not yet implemented')
+            ->assertDontSee("settings('backup.auto')", false)
+            ->assertDontSee("settings('backup.next_schedule')", false);
     }
 
     public function test_standalone_wipe_endpoint_executes_database_wipe(): void

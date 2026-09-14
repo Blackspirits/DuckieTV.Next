@@ -8,27 +8,25 @@
 
     <hr class="setting-divider">
 
-    <h2>Auto-Backup</h2>
-    <p>DuckieTV can automatically backup your database every X days.</p>
+    <h2>{{ __('COMMON/autobackup/hdr') }}</h2>
+    <p>{{ __('SETTINGS/BACKUP/autobackup/desc') }}</p>
     <form name="autoBackupForm">
-        <label for="autoBackup">Auto-backup:</label>
-        <select name="autoBackup" id="autoBackup" onchange="alert('Auto-backup setting not yet implemented')">
-            @foreach([
-                ['value' => 0, 'name' => 'Off'],
-                ['value' => 1, 'name' => 'Every day'],
-                ['value' => 2, 'name' => 'Every 2 days'],
-                ['value' => 3, 'name' => 'Every 3 days'],
-                ['value' => 4, 'name' => 'Every 4 days'],
-                ['value' => 5, 'name' => 'Every 5 days'],
-                ['value' => 6, 'name' => 'Every 6 days'],
-                ['value' => 7, 'name' => 'Every week']
-            ] as $option)
-                <option value="{{ $option['value'] }}" {{ settings('backup.auto') == $option['value'] ? 'selected' : '' }}>{{ $option['name'] }}</option>
+        <label for="autoBackup">{{ __('COMMON/autobackup/hdr') }}:</label>
+        @php
+            $autoBackupValues = ['never', 'daily', 'weekly', 'monthly'];
+            $autoBackupLabels = explode('|', __('AUTOBACKUPLIST'));
+            $currentAutoBackupPeriod = settings('autobackup.period') ?? 'monthly';
+        @endphp
+        <select name="autoBackup" id="autoBackup" onchange="BackupRestore.updateAutoBackupPeriod(this.value)">
+            @foreach($autoBackupValues as $index => $value)
+                <option value="{{ $value }}" {{ $currentAutoBackupPeriod === $value ? 'selected' : '' }}>
+                    {{ $autoBackupLabels[$index] ?? ucfirst($value) }}
+                </option>
             @endforeach
         </select>
     </form>
     &nbsp;
-    <p>Next auto-backup scheduled for: {{ settings('backup.next_schedule') ?? 'Not scheduled' }}</p>
+    <p>{{ __('SETTINGS/BACKUP/autobackup-schedule/lbl') }}<span id="nextAutoBackupDate"></span></p>
 
     <hr class="setting-divider">
 

@@ -235,6 +235,32 @@ class SettingsController extends Controller
     }
 
     /**
+     * Return the persisted auto-backup state. Active schedules initialize
+     * their first run timestamp on startup, matching the historical client.
+     */
+    public function autoBackupState()
+    {
+        $period = (string) settings()->get('autobackup.period', 'monthly');
+        if (! in_array($period, ['never', 'daily', 'weekly', 'monthly'], true)) {
+            $period = 'monthly';
+        }
+
+        $lastRun = settings()->get('autobackup.lastrun');
+        $lastRun = is_numeric($lastRun) ? (int) $lastRun : null;
+
+        if ($period !== 'never' && ($lastRun === null || $lastRun <= 0)) {
+            $lastRun = now()->getTimestampMs();
+            settings()->set('autobackup.lastrun', $lastRun);
+        }
+
+        return response()->json([
+            'period' => $period,
+            'last_run' => $lastRun,
+            'favorites_count' => Serie::query()->whereNotNull('name')->count(),
+        ]);
+    }
+
+    /**
      * Wipe DuckieTV user data using the same historical contract as
      * wipe-before-restore.
      */
