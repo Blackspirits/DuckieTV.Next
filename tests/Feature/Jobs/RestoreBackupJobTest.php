@@ -34,7 +34,7 @@ class RestoreBackupJobTest extends TestCase
         ];
 
         $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
-        $maintenance->shouldNotReceive('wipeForRestore');
+        $maintenance->shouldNotReceive('wipeUserDatabase');
 
         $job = new RestoreBackupJob($data);
         $job->handle($mockService, $maintenance);
@@ -62,7 +62,7 @@ class RestoreBackupJobTest extends TestCase
         Cache::shouldReceive('get')->andReturn(['logs' => [], 'percent' => 0]);
 
         $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
-        $maintenance->shouldReceive('wipeForRestore')->once()->ordered();
+        $maintenance->shouldReceive('wipeUserDatabase')->once()->ordered();
 
         $backupService = Mockery::mock(BackupService::class);
         $backupService->shouldReceive('restore')->once()->ordered();

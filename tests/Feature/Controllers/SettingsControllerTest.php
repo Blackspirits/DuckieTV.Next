@@ -5,6 +5,7 @@ namespace Tests\Feature\Controllers;
 use App\Jobs\RestoreBackupJob;
 use App\Models\Serie;
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\DatabaseMaintenanceService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -39,6 +40,46 @@ class SettingsControllerTest extends TestCase
 
         $this->assertTrue($data['settings']['useTrakt_id']);
         $this->assertSame('PROPER 1080p', $data['series']['123'][0]['customSearchString']);
+    }
+
+    public function test_standalone_wipe_endpoint_executes_database_wipe(): void
+    {
+        $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
+        $maintenance->shouldReceive('wipeUserDatabase')->once();
+        $this->app->instance(DatabaseMaintenanceService::class, $maintenance);
+
+        $this->postJson(route('settings.wipe'))
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'message' => 'Database wiped successfully.',
+            ]);
+    }
+
+    public function test_standalone_wipe_endpoint_fails_closed(): void
+    {
+        $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
+        $maintenance->shouldReceive('wipeUserDatabase')
+            ->once()
+            ->andThrow(new \RuntimeException('internal failure detail'));
+        $this->app->instance(DatabaseMaintenanceService::class, $maintenance);
+
+        $response = $this->postJson(route('settings.wipe'));
+
+        $response->assertStatus(500)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Database wipe failed.',
+            ]);
+        $this->assertStringNotContainsString('internal failure detail', $response->getContent());
+    }
+
+    public function test_backup_settings_view_wires_real_standalone_wipe_action(): void
+    {
+        $this->get(route('settings.show', 'backup'))
+            ->assertOk()
+            ->assertSee('BackupRestore.wipeDatabase()', false)
+            ->assertDontSee('Wipe functionality not yet implemented');
     }
 
     public function test_restore_endpoint_dispatches_job()

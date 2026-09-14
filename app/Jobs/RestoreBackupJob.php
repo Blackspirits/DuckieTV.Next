@@ -46,7 +46,7 @@ class RestoreBackupJob implements ShouldQueue
 
         try {
             if ($this->wipe) {
-                $databaseMaintenance->wipeForRestore();
+                $databaseMaintenance->wipeUserDatabase();
 
                 $data = Cache::get('backup_progress', ['logs' => []]);
                 $data['logs'][] = date('H:i:s').' - Existing database wiped.';

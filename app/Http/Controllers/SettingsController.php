@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Settings\ShowSettingsRequest;
 use App\Services\AutoDownloadLifecycleService;
+use App\Services\DatabaseMaintenanceService;
 use App\Services\TorrentClientService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
@@ -225,6 +226,32 @@ class SettingsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Backup export failed.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Wipe DuckieTV user data using the same historical contract as
+     * wipe-before-restore.
+     */
+    public function wipe(DatabaseMaintenanceService $databaseMaintenance)
+    {
+        try {
+            $databaseMaintenance->wipeUserDatabase();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Database wiped successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Database wipe failed.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Database wipe failed.',
             ], 500);
         }
     }

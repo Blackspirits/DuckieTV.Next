@@ -184,6 +184,36 @@ window.BackupRestore = {
         this.selectedFile = null;
     },
 
+    wipeDatabase: function () {
+        const title = this.i18n['COMMON/wipe/hdr'] || 'Wipe database and settings';
+        const message = this.i18n['BACKUPCTRLjs/wipe/desc'] || 'Do you really want to remove all series and episodes from the DuckieTV database and clear all the settings?';
+
+        Modal.confirm(title, `<p>${message}</p>`, () => {
+            const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+            fetch('/settings/wipe', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                    'Accept': 'application/json'
+                }
+            })
+                .then(async response => {
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Database wipe failed.');
+                    }
+
+                    window.location.reload();
+                })
+                .catch(error => {
+                    const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                    alert(`${prefix}: ${error.message}`);
+                });
+        });
+    },
+
     clearInput: function () {
         const input = document.getElementById('backupInput');
         if (input) input.value = '';
