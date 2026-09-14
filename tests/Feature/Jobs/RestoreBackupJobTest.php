@@ -4,6 +4,7 @@ namespace Tests\Feature\Jobs;
 
 use App\Jobs\RestoreBackupJob;
 use App\Services\BackupService;
+use App\Services\DatabaseMaintenanceService;
 use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
@@ -32,8 +33,11 @@ class RestoreBackupJobTest extends TestCase
             ],
         ];
 
+        $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
+        $maintenance->shouldNotReceive('wipeForRestore');
+
         $job = new RestoreBackupJob($data);
-        $job->handle($mockService);
+        $job->handle($mockService, $maintenance);
 
         // Assert Batch Dispatched
         \Illuminate\Support\Facades\Bus::assertBatched(function (\Illuminate\Bus\PendingBatch $batch) {
@@ -50,5 +54,24 @@ class RestoreBackupJobTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_job_wipes_before_restoring_settings_when_requested(): void
+    {
+        Cache::shouldReceive('put')->atLeast()->times(1);
+        Cache::shouldReceive('get')->andReturn(['logs' => [], 'percent' => 0]);
+
+        $maintenance = Mockery::mock(DatabaseMaintenanceService::class);
+        $maintenance->shouldReceive('wipeForRestore')->once()->ordered();
+
+        $backupService = Mockery::mock(BackupService::class);
+        $backupService->shouldReceive('restore')->once()->ordered();
+
+        $job = new RestoreBackupJob([
+            'settings' => ['torrenting.client' => 'Transmission'],
+            'series' => [],
+        ], true);
+
+        $job->handle($backupService, $maintenance);
     }
 }

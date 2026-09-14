@@ -57,6 +57,24 @@ class SettingsControllerTest extends TestCase
         Bus::assertDispatched(RestoreBackupJob::class);
     }
 
+    public function test_restore_endpoint_propagates_wipe_flag(): void
+    {
+        Bus::fake();
+
+        $file = UploadedFile::fake()->createWithContent('backup.json', '{}');
+
+        $this->postJson(route('settings.restore'), [
+            'backup_file' => $file,
+            'wipe' => true,
+        ])->assertOk();
+
+        Bus::assertDispatched(RestoreBackupJob::class, function (RestoreBackupJob $job): bool {
+            $property = new \ReflectionProperty($job, 'wipe');
+
+            return $property->getValue($job) === true;
+        });
+    }
+
     public function test_restore_progress_endpoint_returns_json()
     {
         Cache::put('backup_progress', ['percent' => 50, 'status' => 'running']);

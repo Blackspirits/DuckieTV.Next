@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\BackupService;
+use App\Services\DatabaseMaintenanceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,14 +22,17 @@ class RestoreBackupJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        protected array $backupData
+        protected array $backupData,
+        protected bool $wipe = false
     ) {}
 
     /**
      * Execute the job.
      */
-    public function handle(BackupService $backupService): void
-    {
+    public function handle(
+        BackupService $backupService,
+        DatabaseMaintenanceService $databaseMaintenance
+    ): void {
         // Initial Cache State
 
         Cache::put('backup_progress', [
@@ -41,6 +45,14 @@ class RestoreBackupJob implements ShouldQueue
         ]);
 
         try {
+            if ($this->wipe) {
+                $databaseMaintenance->wipeForRestore();
+
+                $data = Cache::get('backup_progress', ['logs' => []]);
+                $data['logs'][] = date('H:i:s').' - Existing database wiped.';
+                Cache::put('backup_progress', $data);
+            }
+
             // 1. Restore Settings First (Fast, Synchronous)
             if (isset($this->backupData['settings'])) {
                 $backupService->restore(['settings' => $this->backupData['settings']], function ($p, $m) {
