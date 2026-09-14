@@ -184,26 +184,32 @@ class AutoDownloadLifecycleTest extends TestCase
 
     public function test_periodic_delay_is_clamped_to_period_window(): void
     {
-        $this->createEpisode(
-            ['customDelay' => 10_000, 'runtime' => 45],
-            ['firstaired' => now()->subHours(25)->getTimestampMs()]
-        );
-        $this->configureSettings(['autodownload.period' => 1]);
+        $this->travelTo('2026-01-15 12:00:00');
 
-        $client = Mockery::mock(TorrentClientInterface::class);
-        $client->shouldReceive('connect')->once()->andReturn(true);
-        $client->shouldReceive('getTorrents')->once()->andReturn([]);
-        $client->shouldReceive('isConnected')->times(4)->andReturn(true);
+        try {
+            $this->createEpisode(
+                ['customDelay' => 10_000, 'runtime' => 45],
+                ['firstaired' => now()->subHours(25)->getTimestampMs()]
+            );
+            $this->configureSettings(['autodownload.period' => 1]);
 
-        $this->torrentClients->shouldReceive('getActiveClient')->once()->andReturn($client);
-        $this->sceneName->shouldReceive('getSearchStringForEpisode')->once()->andReturn('Lifecycle Show s01e01');
-        $this->search->shouldReceive('search')->once()->andReturn([]);
-        $this->settings->shouldReceive('set')->once()->with('autodownload.lastrun', Mockery::type('int'));
+            $client = Mockery::mock(TorrentClientInterface::class);
+            $client->shouldReceive('connect')->once()->andReturn(true);
+            $client->shouldReceive('getTorrents')->once()->andReturn([]);
+            $client->shouldReceive('isConnected')->times(4)->andReturn(true);
 
-        $this->service->check();
+            $this->torrentClients->shouldReceive('getActiveClient')->once()->andReturn($client);
+            $this->sceneName->shouldReceive('getSearchStringForEpisode')->once()->andReturn('Lifecycle Show s01e01');
+            $this->search->shouldReceive('search')->once()->andReturn([]);
+            $this->settings->shouldReceive('set')->once()->with('autodownload.lastrun', Mockery::type('int'));
 
-        $activity = AutoDownloadActivity::query()->firstOrFail();
-        $this->assertSame(AutoDownloadService::STATUS_NOTHING_FOUND, (int) $activity->status);
+            $this->service->check();
+
+            $activity = AutoDownloadActivity::query()->firstOrFail();
+            $this->assertSame(AutoDownloadService::STATUS_NOTHING_FOUND, (int) $activity->status);
+        } finally {
+            $this->travelBack();
+        }
     }
 
     public function test_manual_download_preserves_pd1_direct_action_semantics_and_returns_client_success(): void
