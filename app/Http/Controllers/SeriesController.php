@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\RateLimitException;
+use App\Services\DatabaseMaintenanceLock;
 use App\Services\FavoritesService;
 use App\Services\SceneNameResolverService;
-use App\Services\TraktService;
+use App\Services\SeriesRefreshService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,16 +16,16 @@ class SeriesController extends Controller
 
     protected SceneNameResolverService $sceneNameResolver;
 
-    protected TraktService $trakt;
+    protected SeriesRefreshService $seriesRefresh;
 
     public function __construct(
         FavoritesService $favorites,
         SceneNameResolverService $sceneNameResolver,
-        TraktService $trakt
+        SeriesRefreshService $seriesRefresh
     ) {
         $this->favorites = $favorites;
         $this->sceneNameResolver = $sceneNameResolver;
-        $this->trakt = $trakt;
+        $this->seriesRefresh = $seriesRefresh;
     }
 
     /**
@@ -219,42 +220,54 @@ class SeriesController extends Controller
      * Mirrors the historical FavoritesManager.refresh flow while preserving
      * local-only series settings through FavoritesService's existing update path.
      */
-    public function refresh(int $id)
+    public function refresh(int $id, DatabaseMaintenanceLock $maintenanceLock)
     {
-        $serie = $this->favorites->getById($id);
+        $lockOwner = $maintenanceLock->acquire();
 
-        if (! $serie) {
-            return abort(404, 'Show not found');
-        }
-
-        if (! $serie->trakt_id) {
-            return redirect()->back()->with('error', "Cannot refresh {$serie->name}: missing Trakt ID.");
+        if ($lockOwner === null) {
+            return redirect()->back()->with(
+                'error',
+                'Another database maintenance operation is already running.'
+            );
         }
 
         try {
-            $data = $this->trakt->serie((string) $serie->trakt_id);
-            $updated = $this->favorites->addFavorite($data, [], true);
+            $serie = $this->favorites->getById($id);
 
-            return redirect()->back()->with('status', "Refreshed {$updated->name}.");
-        } catch (RateLimitException $e) {
-            Log::info('Series refresh deferred by Trakt rate limit.', [
-                'serie_id' => $serie->id,
-                'trakt_id' => $serie->trakt_id,
-                'retry_after' => $e->retryAfter,
-            ]);
+            if (! $serie) {
+                return abort(404, 'Show not found');
+            }
 
-            return redirect()->back()->with(
-                'error',
-                "Trakt is temporarily unavailable. Try again in {$e->retryAfter} seconds."
-            );
-        } catch (\Throwable $e) {
-            Log::error('Series refresh failed.', [
-                'serie_id' => $serie->id,
-                'trakt_id' => $serie->trakt_id,
-                'exception' => $e::class,
-            ]);
+            if (! $serie->trakt_id) {
+                return redirect()->back()->with('error', "Cannot refresh {$serie->name}: missing Trakt ID.");
+            }
 
-            return redirect()->back()->with('error', "Failed to refresh {$serie->name}.");
+            try {
+                $updated = $this->seriesRefresh->refresh($serie);
+
+                return redirect()->back()->with('status', "Refreshed {$updated->name}.");
+            } catch (RateLimitException $e) {
+                Log::info('Series refresh deferred by Trakt rate limit.', [
+                    'serie_id' => $serie->id,
+                    'trakt_id' => $serie->trakt_id,
+                    'retry_after' => $e->retryAfter,
+                ]);
+
+                return redirect()->back()->with(
+                    'error',
+                    "Trakt is temporarily unavailable. Try again in {$e->retryAfter} seconds."
+                );
+            } catch (\Throwable $e) {
+                Log::error('Series refresh failed.', [
+                    'serie_id' => $serie->id,
+                    'trakt_id' => $serie->trakt_id,
+                    'exception' => $e::class,
+                ]);
+
+                return redirect()->back()->with('error', "Failed to refresh {$serie->name}.");
+            }
+        } finally {
+            $maintenanceLock->release($lockOwner);
         }
     }
 

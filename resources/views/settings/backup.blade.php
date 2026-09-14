@@ -67,12 +67,12 @@
 
     <hr class="setting-divider">
 
-    <h2>Refresh Database</h2>
-    <p>This will re-fetch data for all series from Trakt.tv.</p>
+    <h2>{{ __('SETTINGS/BACKUP/refresh/hdr') }}</h2>
+    <p>{{ __('SETTINGS/BACKUP/refresh/desc') }}</p>
     <div class="buttons">
-        <a class="btn btn-danger" href="javascript:void(0)" onclick="confirm('Are you sure you want to refresh the entire database? This may take a while.') && alert('Refresh functionality not yet implemented')">
-            <i class="glyphicon glyphicon-refresh"></i> <span>Refresh Database</span>
-        </a>
+        <button id="refreshDatabaseButton" type="button" class="btn btn-danger" onclick="BackupRestore.refreshDatabase()">
+            <i class="glyphicon glyphicon-refresh"></i> <span>{{ __('SETTINGS/BACKUP/refresh/btn') }}</span>
+        </button>
     </div>
 </div>
 

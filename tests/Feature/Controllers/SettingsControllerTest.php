@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Controllers;
 
+use App\Jobs\RefreshDatabaseJob;
 use App\Jobs\RestoreBackupJob;
 use App\Models\Serie;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
+use App\Services\DatabaseRefreshProgressService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -110,6 +112,98 @@ class SettingsControllerTest extends TestCase
             ->assertOk()
             ->assertSee('BackupRestore.wipeDatabase()', false)
             ->assertDontSee('Wipe functionality not yet implemented');
+    }
+
+    public function test_database_refresh_dispatches_snapshot_under_maintenance_lock(): void
+    {
+        Bus::fake();
+
+        $first = Serie::create(['name' => 'One', 'trakt_id' => 101]);
+        $second = Serie::create(['name' => 'Two', 'trakt_id' => 202]);
+
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('acquire')->once()->andReturn('refresh-owner');
+        $lock->shouldNotReceive('release');
+        $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+        $progress = Mockery::mock(DatabaseRefreshProgressService::class);
+        $progress->shouldReceive('queued')->once()->with(2);
+        $progress->shouldNotReceive('fail');
+        $this->app->instance(DatabaseRefreshProgressService::class, $progress);
+
+        $this->postJson(route('settings.refresh'))
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'status' => 'started',
+                'total' => 2,
+            ]);
+
+        Bus::assertDispatched(RefreshDatabaseJob::class, function (RefreshDatabaseJob $job) use ($first, $second): bool {
+            $ids = new \ReflectionProperty($job, 'seriesIds');
+            $owner = new \ReflectionProperty($job, 'maintenanceLockOwner');
+
+            return $ids->getValue($job) === [$first->id, $second->id]
+                && $owner->getValue($job) === 'refresh-owner';
+        });
+    }
+
+    public function test_database_refresh_rejects_concurrent_maintenance(): void
+    {
+        Bus::fake();
+
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('acquire')->once()->andReturn(null);
+        $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+        $progress = Mockery::mock(DatabaseRefreshProgressService::class);
+        $progress->shouldNotReceive('queued');
+        $progress->shouldNotReceive('fail');
+        $this->app->instance(DatabaseRefreshProgressService::class, $progress);
+
+        $this->postJson(route('settings.refresh'))
+            ->assertStatus(409)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ]);
+
+        Bus::assertNotDispatched(RefreshDatabaseJob::class);
+    }
+
+    public function test_database_refresh_progress_endpoint_returns_current_state(): void
+    {
+        $progress = Mockery::mock(DatabaseRefreshProgressService::class);
+        $progress->shouldReceive('get')->once()->andReturn([
+            'status' => 'running',
+            'total' => 4,
+            'processed' => 2,
+            'completed' => 2,
+            'failed' => 0,
+            'percent' => 50,
+            'current' => 'Two',
+            'failures' => [],
+            'batch_id' => 'batch-1',
+            'message' => 'Refreshing series from Trakt...',
+        ]);
+        $this->app->instance(DatabaseRefreshProgressService::class, $progress);
+
+        $this->getJson(route('settings.refresh-progress'))
+            ->assertOk()
+            ->assertJson([
+                'status' => 'running',
+                'total' => 4,
+                'processed' => 2,
+                'percent' => 50,
+            ]);
+    }
+
+    public function test_backup_settings_view_wires_real_database_refresh_action(): void
+    {
+        $this->get(route('settings.show', 'backup'))
+            ->assertOk()
+            ->assertSee('BackupRestore.refreshDatabase()', false)
+            ->assertDontSee('Refresh functionality not yet implemented');
     }
 
     public function test_restore_endpoint_dispatches_job()
