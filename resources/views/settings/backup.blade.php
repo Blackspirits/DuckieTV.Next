@@ -1,34 +1,34 @@
 <div ng-controller="BackupCtrl">
     <h2>Backup</h2>
     <div class="buttons">
-        <a class="btn btn-success" href="{{ route('settings.backup-export') }}">
+        <button type="button" class="btn btn-success" onclick="BackupRestore.downloadManualBackup()">
             <i class="glyphicon glyphicon-floppy-save"></i> <span>Create Backup</span>
-        </a>
+        </button>
     </div>
 
     <hr class="setting-divider">
 
-    <h2>Auto-Backup</h2>
-    <p>DuckieTV can automatically backup your database every X days.</p>
+    <h2>{{ __('COMMON/autobackup/hdr') }}</h2>
+    <p>{{ __('SETTINGS/BACKUP/autobackup/desc') }}</p>
+    @php
+        $autoBackupLabels = explode('|', __('AUTOBACKUPLIST'));
+        $autoBackupPeriods = ['never', 'daily', 'weekly', 'monthly'];
+    @endphp
     <form name="autoBackupForm">
-        <label for="autoBackup">Auto-backup:</label>
-        <select name="autoBackup" id="autoBackup" onchange="alert('Auto-backup setting not yet implemented')">
-            @foreach([
-                ['value' => 0, 'name' => 'Off'],
-                ['value' => 1, 'name' => 'Every day'],
-                ['value' => 2, 'name' => 'Every 2 days'],
-                ['value' => 3, 'name' => 'Every 3 days'],
-                ['value' => 4, 'name' => 'Every 4 days'],
-                ['value' => 5, 'name' => 'Every 5 days'],
-                ['value' => 6, 'name' => 'Every 6 days'],
-                ['value' => 7, 'name' => 'Every week']
-            ] as $option)
-                <option value="{{ $option['value'] }}" {{ settings('backup.auto') == $option['value'] ? 'selected' : '' }}>{{ $option['name'] }}</option>
+        <label for="autoBackup">{{ __('COMMON/autobackup/hdr') }}:</label>
+        <select name="autobackup.period" id="autoBackup" onchange="BackupRestore.saveAutoBackupPeriod(this.value)">
+            @foreach($autoBackupPeriods as $index => $period)
+                <option value="{{ $period }}" {{ settings('autobackup.period') === $period ? 'selected' : '' }}>
+                    {{ $autoBackupLabels[$index] ?? ucfirst($period) }}
+                </option>
             @endforeach
         </select>
     </form>
     &nbsp;
-    <p>Next auto-backup scheduled for: {{ settings('backup.next_schedule') ?? 'Not scheduled' }}</p>
+    <p>
+        <span>{{ __('SETTINGS/BACKUP/autobackup-schedule/lbl') }}</span>
+        <span id="autoBackupNextRun">—</span>
+    </p>
 
     <hr class="setting-divider">
 
