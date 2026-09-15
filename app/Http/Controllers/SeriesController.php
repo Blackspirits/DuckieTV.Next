@@ -176,9 +176,10 @@ class SeriesController extends Controller
         }
 
         $action = $request->input('action');
+        $watchedDownloadedPaired = (bool) settings()->get('episode.watched-downloaded.pairing', true);
 
         if ($action === 'mark_watched') {
-            $serie->markSerieAsWatched();
+            $serie->markSerieAsWatched($watchedDownloadedPaired);
         } elseif ($action === 'mark_downloaded') {
             $serie->markSerieAsDownloaded();
         } elseif ($action === 'toggle_autodownload') {
@@ -191,7 +192,7 @@ class SeriesController extends Controller
             if ($season) {
                 foreach ($season->episodes as $episode) {
                     if ($episode->hasAired()) {
-                        $episode->markWatched();
+                        $episode->markWatched($watchedDownloadedPaired);
                     }
                 }
             }
