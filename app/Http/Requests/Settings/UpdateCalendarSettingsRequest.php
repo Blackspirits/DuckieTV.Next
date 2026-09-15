@@ -14,11 +14,11 @@ class UpdateCalendarSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'calendar.start_sunday' => 'boolean',
+            'calendar.startSunday' => 'boolean',
             'calendar.mode' => 'in:date,week',
-            'calendar.show_specials' => 'boolean',
-            'calendar.show_downloaded' => 'boolean',
-            'calendar.show_episode_numbers' => 'boolean',
+            'calendar.show-specials' => 'boolean',
+            'calendar.show-downloaded' => 'boolean',
+            'calendar.show-episode-numbers' => 'boolean',
         ];
     }
 }
