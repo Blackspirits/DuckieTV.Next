@@ -17,6 +17,20 @@
     <link rel="stylesheet" href="{{ asset('css/toasts.css') }}">
     <link rel="stylesheet" href="{{ asset('css/dialogs.css') }}">
 
+    @if(! (bool) settings()->get('font.bebas.enabled', true))
+    <style id="bebas-override">
+        h1, h2, h3, strong, .inline-checkbox label, sidepanel .buttons .torrent-mini-remote-control > span, .settings .buttons .btn {
+            font-family: helvetica, sans-serif !important;
+        }
+        strong {
+            font-weight: bold !important;
+        }
+        strong, sidepanel .buttons .torrent-mini-remote-control > span, sidepanel .buttons strong {
+            letter-spacing: normal !important;
+        }
+    </style>
+    @endif
+
     <style>
         /* Only styles NOT covered by legacy CSS */
         body {
@@ -42,7 +56,7 @@
     </div>
 
     <background-rotator channel="'background:load'">
-        <div class="background-image-container">
+        <div class="background-image-container" style="opacity: {{ settings()->get('background-rotator.opacity', 0.4) }}">
             <div class="placeholder active"></div>
             <div class="bg1"></div>
             <div class="bg2"></div>
@@ -133,6 +147,7 @@
     <script src="{{ asset('js/SidePanel.js') }}"></script>
     <script src="{{ asset('js/Calendar.js') }}"></script>
     <script src="{{ asset('js/BackgroundRotator.js') }}"></script>
+    <script src="{{ asset('js/SeriesGrid.js') }}"></script>
     <script src="{{ asset('js/TorrentSearch.js') }}"></script>
     <script src="{{ asset('js/TraktTrending.js') }}"></script>
     <script src="{{ asset('js/Subtitles.js') }}"></script>

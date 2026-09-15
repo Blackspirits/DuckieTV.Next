@@ -73,7 +73,7 @@
                 <th>NETWORK</th>
                 <td>{{ $serie->network }}</td>
             </tr>
-            @if($serie->rating)
+            @if(settings()->get('download.ratings', true) && $serie->rating)
             <tr>
                 <th>RATING</th>
                 <td>{{ $serie->rating }}% ({{ $serie->ratingcount }} votes)</td>

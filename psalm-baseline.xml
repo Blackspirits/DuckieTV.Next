@@ -601,14 +601,12 @@
       <code><![CDATA[preg_replace('/^(The |A )/i', '', $this->name ?? '')]]></code>
     </NullableReturnStatement>
     <PossiblyUnusedMethod>
-      <code><![CDATA[getActiveSeason]]></code>
       <code><![CDATA[getEpisodeCount]]></code>
       <code><![CDATA[getFormattedTotalRunTime]]></code>
       <code><![CDATA[getFormattedTotalWatchedTime]]></code>
       <code><![CDATA[getLastEpisode]]></code>
       <code><![CDATA[getNextEpisode]]></code>
       <code><![CDATA[getNotWatchedCount]]></code>
-      <code><![CDATA[getNotWatchedSeason]]></code>
       <code><![CDATA[getSortName]]></code>
       <code><![CDATA[getWatchedPercentage]]></code>
       <code><![CDATA[markSerieAsUnWatched]]></code>

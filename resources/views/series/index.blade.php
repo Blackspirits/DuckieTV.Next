@@ -87,7 +87,7 @@
                 </div>
             </div>
 
-            <div class="series" series-grid="false">
+            <div class="series" series-grid="{{ settings()->get('library.seriesgrid', true) ? 'true' : 'false' }}">
                 <h1 style='margin-bottom:15px;margin-top:15px;color:rgb(225,225,225);'>
                     {{ __('SERIESLIST/FAVORITES/click-to-see/lbl') }}
                 </h1>
@@ -133,6 +133,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             item.style.display = (statusMatch && genreMatch) ? 'inline-block' : 'none';
         });
+
+        document.dispatchEvent(new CustomEvent('seriesgrid:recalculate'));
     }
 
     document.querySelectorAll('.status-filter, .genre-filter').forEach(el => {
