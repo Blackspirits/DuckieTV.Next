@@ -36,3 +36,12 @@ it('parses locale names correctly', function () {
 
     expect($locales['en_US'])->toBe('American English');
 });
+
+it('resolves historical locale casing to the exact translation filename locale', function () {
+    $service = new TranslationService;
+
+    expect($service->resolveLocale('en_us'))->toBe('en_US')
+        ->and($service->resolveLocale('pt_pt'))->toBe('pt_PT')
+        ->and($service->resolveLocale('pt-PT'))->toBe('pt_PT')
+        ->and($service->resolveLocale('zz_zz'))->toBeNull();
+});

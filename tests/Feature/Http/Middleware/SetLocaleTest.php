@@ -9,13 +9,21 @@ use Illuminate\Support\Facades\Config;
 
 uses(RefreshDatabase::class);
 
-it('sets the locale if valid', function () {
-    // Mock TranslationService
-    $translationService = Mockery::mock(TranslationService::class);
-    $translationService->shouldReceive('getAvailableLocales')->andReturn(['en_US' => 'English', 'nl_NL' => 'Dutch']);
+function localeTranslationService(array $locales): TranslationService
+{
+    $translationService = Mockery::mock(TranslationService::class)->makePartial();
+    $translationService->shouldReceive('getAvailableLocales')->andReturn($locales);
 
-    // Use settings helper to ensure service cache is updated
-    settings('application.locale', 'nl_NL');
+    return $translationService;
+}
+
+it('sets the locale if valid', function () {
+    $translationService = localeTranslationService([
+        'en_US' => 'English',
+        'nl_NL' => 'Dutch',
+    ]);
+
+    settings('application.locale', 'nl_nl');
 
     $middleware = new SetLocale($translationService);
     $request = Request::create('/', 'GET');
@@ -28,8 +36,7 @@ it('sets the locale if valid', function () {
 });
 
 it('falls back to en_US if en is requested', function () {
-    $translationService = Mockery::mock(TranslationService::class);
-    $translationService->shouldReceive('getAvailableLocales')->andReturn(['en_US' => 'English']);
+    $translationService = localeTranslationService(['en_US' => 'English']);
 
     settings('application.locale', 'en');
 
@@ -44,8 +51,7 @@ it('falls back to en_US if en is requested', function () {
 });
 
 it('normalizes locale strings', function () {
-    $translationService = Mockery::mock(TranslationService::class);
-    $translationService->shouldReceive('getAvailableLocales')->andReturn(['en_US' => 'English']);
+    $translationService = localeTranslationService(['en_US' => 'English']);
 
     settings('application.locale', 'en-US');
 
@@ -59,10 +65,13 @@ it('normalizes locale strings', function () {
     });
 });
 
-it('falls back to first available locale if invalid', function () {
-    $translationService = Mockery::mock(TranslationService::class);
-    // Return array where 'de_DE' is first
-    $translationService->shouldReceive('getAvailableLocales')->andReturn(['de_DE' => 'German', 'en_US' => 'English']);
+it('uses configured fallback before first available locale if requested locale is invalid', function () {
+    Config::set('app.fallback_locale', 'en_US');
+
+    $translationService = localeTranslationService([
+        'de_DE' => 'German',
+        'en_US' => 'English',
+    ]);
 
     settings('application.locale', 'invalid_LOCALE');
 
@@ -70,21 +79,18 @@ it('falls back to first available locale if invalid', function () {
     $request = Request::create('/', 'GET');
 
     $middleware->handle($request, function ($req) {
-        expect(App::getLocale())->toBe('de_DE');
+        expect(App::getLocale())->toBe('en_US');
 
         return response('OK');
     });
 });
 
 it('does nothing if no setting and no valid fallback', function () {
-    // Setup initial state
     Config::set('app.locale', 'default');
+    Config::set('app.fallback_locale', 'fallback');
     App::setLocale('default');
 
-    $translationService = Mockery::mock(TranslationService::class);
-    $translationService->shouldReceive('getAvailableLocales')->andReturn([]);
-
-    // No setting created
+    $translationService = localeTranslationService([]);
 
     $middleware = new SetLocale($translationService);
     $request = Request::create('/', 'GET');
