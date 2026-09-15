@@ -94,6 +94,7 @@ class SettingsController extends Controller
         $allowed = [
             'display' => \App\Http\Requests\Settings\UpdateDisplaySettingsRequest::class,
             'language' => \App\Http\Requests\Settings\UpdateLanguageSettingsRequest::class,
+            'miscellaneous' => \App\Http\Requests\Settings\UpdateMiscellaneousSettingsRequest::class,
             'backup' => \App\Http\Requests\Settings\UpdateBackupSettingsRequest::class,
             'calendar' => \App\Http\Requests\Settings\UpdateCalendarSettingsRequest::class,
             'torrent-search' => \App\Http\Requests\Settings\UpdateTorrentSearchSettingsRequest::class,

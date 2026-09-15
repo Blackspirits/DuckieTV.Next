@@ -134,7 +134,10 @@ class CalendarController extends Controller
     public function markDayWatched(Request $request)
     {
         $date = Carbon::parse($request->get('date'));
-        $this->calendar->markDayWatched($date);
+        $this->calendar->markDayWatched(
+            $date,
+            (bool) settings()->get('episode.watched-downloaded.pairing', true)
+        );
 
         return back()->with('status', "Marked all episodes on {$date->toDateString()} as watched.");
     }

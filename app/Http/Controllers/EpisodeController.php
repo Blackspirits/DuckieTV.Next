@@ -87,11 +87,16 @@ class EpisodeController extends Controller
     {
         $episode = Episode::findOrFail($id);
         $action = $request->input('action');
+        $watchedDownloadedPaired = (bool) settings()->get('episode.watched-downloaded.pairing', true);
 
         if ($action === 'toggle_watched') {
-            $episode->watched ? $episode->markNotWatched() : $episode->markWatched();
+            $episode->watched
+                ? $episode->markNotWatched()
+                : $episode->markWatched($watchedDownloadedPaired);
         } elseif ($action === 'toggle_download') {
-            $episode->downloaded ? $episode->markNotDownloaded() : $episode->markDownloaded();
+            $episode->downloaded
+                ? $episode->markNotDownloaded($watchedDownloadedPaired)
+                : $episode->markDownloaded();
         } elseif ($action === 'toggle_leaked') {
             $episode->isLeaked() ? $episode->markNotLeaked() : $episode->markLeaked();
         }
