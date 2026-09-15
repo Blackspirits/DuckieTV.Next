@@ -148,6 +148,27 @@ window.Settings = {
     }
 };
 
+// Historical Language settings changed both application.language and
+// application.locale, then reloaded so the translation table was rebuilt.
+// The server mirrors application.locale into application.language.
+window.setLanguageLocale = function (locale) {
+    const input = document.getElementById('input_application_locale');
+    if (!input) {
+        console.error('Language locale input not found.');
+        return;
+    }
+
+    input.value = String(locale).toLowerCase().replace('-', '_');
+
+    return window.Settings.save('language').then(data => {
+        if (data && data.success) {
+            window.location.reload();
+        }
+
+        return data;
+    });
+};
+
 // Global functions for Torrent Settings (accessed via inline onclick)
 window.updateTorrentSetting = function (key, value) {
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');

@@ -160,6 +160,16 @@ class SettingsController extends Controller
             }
         }
 
+        // Historical changeLanguage() persisted both keys together. Keep the
+        // generic settings update path unchanged for other sections, but mirror
+        // the selected locale into application.language for backup compatibility.
+        if ($section === 'language') {
+            $locale = \Illuminate\Support\Arr::get($validated, 'application.locale');
+            if (is_string($locale)) {
+                \Illuminate\Support\Arr::set($validated, 'application.language', $locale);
+            }
+        }
+
         // validated() returns nested arrays corresponding to dot rules.
         // We need to flatten them back to dot notation for storage.
         $flattened = \Illuminate\Support\Arr::dot($validated);
