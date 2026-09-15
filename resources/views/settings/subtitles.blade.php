@@ -6,7 +6,7 @@
 
 	<hr>
     @php
-        $selectedLanguages = settings('subtitles.languages', []); // Array of codes
+        $selectedLanguages = settings()->get('subtitles.languages', []); // Array of codes
         $selectedString = implode(', ', $selectedLanguages);
     @endphp
 
