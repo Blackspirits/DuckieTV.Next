@@ -10,6 +10,7 @@ use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
 use App\Services\DatabaseRefreshProgressService;
+use App\Services\SubtitlesService;
 use App\Services\TorrentClientService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
@@ -21,6 +22,8 @@ class SettingsController extends Controller
 
     protected $torrentClientService;
 
+    protected SubtitlesService $subtitlesService;
+
     protected $backupService;
 
     protected AutoDownloadLifecycleService $autoDownloadLifecycle;
@@ -28,11 +31,13 @@ class SettingsController extends Controller
     public function __construct(
         TranslationService $translationService,
         TorrentClientService $torrentClientService,
+        SubtitlesService $subtitlesService,
         \App\Services\BackupService $backupService,
         AutoDownloadLifecycleService $autoDownloadLifecycle
     ) {
         $this->translationService = $translationService;
         $this->torrentClientService = $torrentClientService;
+        $this->subtitlesService = $subtitlesService;
         $this->backupService = $backupService;
         $this->autoDownloadLifecycle = $autoDownloadLifecycle;
     }
@@ -73,8 +78,13 @@ class SettingsController extends Controller
         // Validation is handled by ShowSettingsRequest
 
         $data = [];
-        if (in_array($section, ['language', 'subtitles'])) {
+        if ($section === 'language') {
             $data['locales'] = $this->translationService->getAvailableLocales();
+        }
+
+        if ($section === 'subtitles') {
+            $data['subtitleLanguages'] = $this->subtitlesService->getLanguages();
+            $data['subtitleShortCodes'] = $this->subtitlesService->getShortCodes();
         }
 
         if ($section === 'torrent') {
@@ -170,9 +180,25 @@ class SettingsController extends Controller
             }
         }
 
+        // Preserve validated array-valued settings as whole leaves. Arr::dot()
+        // would otherwise expand them into indexed keys such as
+        // subtitles.languages.0 and leave the canonical array setting unchanged.
+        $arraySettings = [];
+        foreach ($rules as $key => $rule) {
+            $isArrayRule = $rule === 'array'
+                || (is_array($rule) && in_array('array', $rule, true));
+
+            if (! $isArrayRule || ! \Illuminate\Support\Arr::has($validated, $key)) {
+                continue;
+            }
+
+            $arraySettings[$key] = \Illuminate\Support\Arr::get($validated, $key);
+            \Illuminate\Support\Arr::forget($validated, $key);
+        }
+
         // validated() returns nested arrays corresponding to dot rules.
-        // We need to flatten them back to dot notation for storage.
-        $flattened = \Illuminate\Support\Arr::dot($validated);
+        // Flatten scalar leaves back to dot notation, then restore whole arrays.
+        $flattened = array_merge(\Illuminate\Support\Arr::dot($validated), $arraySettings);
 
         foreach ($flattened as $key => $value) {
             settings($key, $value);

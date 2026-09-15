@@ -1,50 +1,63 @@
-<div class="buttons languages">
+@php
+    $selectedLanguages = settings()->get('subtitles.languages', ['eng']);
+    $selectedLanguages = is_array($selectedLanguages) ? array_values($selectedLanguages) : ['eng'];
 
-	<h2>Subtitles</h2>
+    $selectedNames = array_values(array_filter(array_map(
+        static fn (string $code): ?string => $subtitleLanguages[$code] ?? null,
+        $selectedLanguages
+    )));
+@endphp
 
-	<p>Choose which subtitle languages you want to search for</p>
+<div
+    class="buttons languages"
+    id="subtitle-settings"
+    data-selected-languages='@json($selectedLanguages)'
+>
+    <h2>{{ __('COMMON/subtitles/hdr') }}</h2>
 
-	<hr>
-    @php
-        $selectedLanguages = settings()->get('subtitles.languages', []); // Array of codes
-        $selectedString = implode(', ', $selectedLanguages);
-    @endphp
+    <p>{{ __('SETTINGS/SUBTITLES/desc') }}</p>
 
-	<p>
-        @if(!empty($selectedLanguages))
-		    <strong>Selected:</strong><br> {{ $selectedString }}<br>
-        @else
-		    <strong>No filter set. All languages will be shown.</strong>
-        @endif
-	</p>
-	<p style='text-align: right'>
-        @if(!empty($selectedLanguages))
-            <a href="javascript:void(0)" onclick="alert('Clear selection not implemented')" class="btn btn-xs btn-warning" style="display:inline-block; padding-right:15px;">
-                <i class="glyphicon glyphicon-trash" style='font-size:15px; line-height: 23px; vertical-align:middle'></i>
-                <span>Clear selection</span>
-            </a>
-        @endif
-	</p>
+    <hr>
 
-	<hr>
+    <p>
+        <strong
+            id="subtitle-selected-label"
+            @if($selectedLanguages === []) style="display:none" @endif
+        >{{ __('SETTINGS/SUBTITLES/selected/lbl') }}</strong>
+        <br>
+        <span id="subtitle-selected-languages">{{ implode(', ', $selectedNames) }}</span>
+        <strong
+            id="subtitle-selected-none"
+            @if($selectedLanguages !== []) style="display:none" @endif
+        >{{ __('SETTINGS/SUBTITLES/selected-none/lbl') }}</strong>
+    </p>
 
-    {{-- 
-        We can reuse the available locales for subtitle languages, 
-        or define a specific subtitle language list if it differs from UI languages.
-        For now, let's use the provided locales from the controller if available, 
-        or fall back to a comprehensive list. 
-        Note: The controller only passes 'locales' to the 'language' view currently.
-        We should probably pass it to 'subtitles' too or share it. 
-    --}}
-    
-    @if(isset($locales))
-        @foreach($locales as $locale => $name)
-            <a href="javascript:void(0)" onclick="alert('Toggle {{ $locale }} not implemented')" class="btn {{ in_array($locale, $selectedLanguages) ? 'btn-success' : '' }}" style="margin: 2px;">
-                <i class="flag flag-{{ strtolower(substr($locale, 3)) }}"></i>
-                <span style='line-height:25px; position:relative; top:-5px;'>{{ $locale }}</span>
-            </a>
-        @endforeach
-    @else
-        <p>No subtitle languages available.</p>
-    @endif
+    <p style="text-align:right">
+        <a
+            href="#"
+            id="subtitle-clear-selection"
+            onclick="clearSubtitleLanguages(); return false;"
+            class="btn btn-xs btn-warning"
+            style="display:{{ $selectedLanguages === [] ? 'none' : 'inline-block' }}; padding-right:15px;"
+        >
+            <i class="glyphicon glyphicon-trash" style="font-size:15px; line-height:23px; vertical-align:middle"></i>
+            <span>{{ __('SETTINGS/SUBTITLES/clear-selection/lbl') }}</span>
+        </a>
+    </p>
+
+    <hr>
+
+    @foreach($subtitleLanguages as $code => $name)
+        <a
+            href="#"
+            data-subtitle-code="{{ $code }}"
+            data-subtitle-name="{{ $name }}"
+            onclick="toggleSubtitleLanguage('{{ $code }}'); return false;"
+            class="btn {{ in_array($code, $selectedLanguages, true) ? 'btn-success' : '' }}"
+            style="margin:2px;"
+        >
+            <i class="flag flag-{{ $subtitleShortCodes[$code] ?? '' }}"></i>
+            <span style="line-height:25px; position:relative; top:-5px;">{{ $name }}</span>
+        </a>
+    @endforeach
 </div>

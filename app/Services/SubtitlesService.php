@@ -28,6 +28,31 @@ class SubtitlesService
         'ukr' => 'Ukrainian', 'vie' => 'Vietnamese',
     ];
 
+    protected array $shortCodes = [
+        'alb' => 'al', 'ara' => 'eg', 'baq' => 'es', 'pob' => 'br',
+        'bul' => 'bg', 'cat' => 'es', 'chi' => 'cn', 'zht' => 'cn',
+        'hrv' => 'hr', 'cze' => 'cz', 'dan' => 'dk', 'dut' => 'nl',
+        'eng' => 'gb', 'est' => 'ee', 'fin' => 'fi', 'fre' => 'fr',
+        'glg' => 'es', 'geo' => 'ge', 'ger' => 'de', 'ell' => 'gr',
+        'heb' => 'il', 'hin' => 'in', 'hun' => 'hu', 'ice' => 'is',
+        'ind' => 'id', 'ita' => 'it', 'jpn' => 'jp', 'khm' => 'kh',
+        'kor' => 'kr', 'mac' => 'mk', 'may' => 'my', 'nor' => 'no',
+        'per' => 'ir', 'pol' => 'pl', 'por' => 'pt', 'rum' => 'ro',
+        'rus' => 'ru', 'scc' => 'rs', 'sin' => 'lk', 'slo' => 'sk',
+        'slv' => 'si', 'spa' => 'es', 'swe' => 'se', 'tgl' => 'ph',
+        'tha' => 'th', 'tur' => 'tr', 'ukr' => 'ua', 'vie' => 'vn',
+    ];
+
+    public function getLanguages(): array
+    {
+        return $this->languages;
+    }
+
+    public function getShortCodes(): array
+    {
+        return $this->shortCodes;
+    }
+
     /**
      * Search for subtitles using OpenSubtitles XML-RPC API.
      */
@@ -43,7 +68,7 @@ class SubtitlesService
             'imdbid' => $imdbId,
             'season' => (int) $episode->seasonnumber,
             'episode' => (int) $episode->episodenumber,
-            'sublanguageid' => implode(',', $languages),
+            'sublanguageid' => $this->formatLanguageFilter($languages),
         ];
 
         return $this->search($options);
@@ -66,10 +91,15 @@ class SubtitlesService
     {
         $options = [
             'query' => $query,
-            'sublanguageid' => implode(',', $languages),
+            'sublanguageid' => $this->formatLanguageFilter($languages),
         ];
 
         return $this->search($options);
+    }
+
+    protected function formatLanguageFilter(array $languages): string
+    {
+        return $languages === [] ? 'all' : implode(',', $languages);
     }
 
     /**
