@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\AutoBackupLifecycleService;
 use App\Services\CalendarService;
 use App\Services\FavoritesService;
 use App\Services\SeriesMetaTranslations;
@@ -24,6 +25,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(FavoritesService::class);
         $this->app->singleton(CalendarService::class);
         $this->app->singleton(SeriesMetaTranslations::class);
+        $this->app->singleton(
+            AutoBackupLifecycleService::class,
+            fn ($app) => new AutoBackupLifecycleService(
+                $app->make(SettingsService::class)
+            )
+        );
         $this->app->singleton(
             SeriesRefreshService::class,
             fn ($app) => new SeriesRefreshService(
