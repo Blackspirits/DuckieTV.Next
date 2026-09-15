@@ -46,7 +46,12 @@ jobs:
 
       # Run Larastan and output to a .sarif file
       - name: Run Larastan Analysis
-        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif
+        run: |
+          set +e
+          ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif
+          status=$?
+          cat phpstan-results.sarif
+          exit $status
 
       # Upload the PHP results to GitHub Security Tab even when analysis finds
       # a new regression and exits non-zero.
