@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\RateLimitException;
+use App\Models\Episode;
+use App\Models\Season;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\FavoritesService;
 use App\Services\SceneNameResolverService;
@@ -107,7 +109,8 @@ class SeriesController extends Controller
      * Ported from episodes.html logic — shows one season at a time with navigation.
      *
      * When season_id is provided (e.g., from seasons grid click), shows that season.
-     * Otherwise, shows the first season with unwatched episodes (or the last season).
+     * Otherwise, follows the historical series.not-watched-eps-btn preference:
+     * first unwatched season when enabled, active aired season when disabled.
      *
      * @see templates/sidepanel/episodes.html in DuckieTV-angular
      */
@@ -123,13 +126,25 @@ class SeriesController extends Controller
 
         // Determine which season to display
         $seasons = $serie->seasons->sortBy('seasonnumber');
+        $activeSeason = null;
+
         if ($season_id) {
-            $activeSeason = $seasons->firstWhere('id', $season_id);
+            foreach ($seasons as $season) {
+                if ($season instanceof Season && $season->id === $season_id) {
+                    $activeSeason = $season;
+                    break;
+                }
+            }
         }
-        if (! isset($activeSeason) || ! $activeSeason) {
-            // Default: first season with unwatched episodes, or last season
-            $activeSeason = $seasons->first(fn ($s) => $s->episodes->where('watched', false)->isNotEmpty())
-                ?? $seasons->last();
+
+        if ($activeSeason === null) {
+            $activeSeason = (bool) settings()->get('series.not-watched-eps-btn', false)
+                ? $serie->getNotWatchedSeason()
+                : $serie->getActiveSeason();
+        }
+
+        if ($activeSeason === null) {
+            abort(404, 'Season not found');
         }
 
         // Pre-calculate search queries for episodes
@@ -141,12 +156,25 @@ class SeriesController extends Controller
         $seasonSearchQuery = ($serie->customSearchString ?: $serie->name).' season '.$activeSeason->seasonnumber;
 
         // Calculate ratings data for the chart
-        $ratingPoints = $activeSeason->episodes->sortBy('episodenumber')->map(function ($episode) {
-            return [
+        $ratingEpisodes = [];
+        foreach ($activeSeason->episodes as $episode) {
+            if ($episode instanceof Episode) {
+                $ratingEpisodes[] = $episode;
+            }
+        }
+
+        usort(
+            $ratingEpisodes,
+            static fn (Episode $left, Episode $right): int => ($left->episodenumber ?? 0) <=> ($right->episodenumber ?? 0)
+        );
+
+        $ratingPoints = [];
+        foreach ($ratingEpisodes as $episode) {
+            $ratingPoints[] = [
                 'y' => $episode->rating ?? 0,
                 'label' => $episode->formatted_episode.' : '.($episode->rating ?? 0).'% ('.($episode->ratingcount ?? 0).' '.__('votes').')',
             ];
-        })->values();
+        }
 
         return view('series._episodes', [
             'serie' => $serie,

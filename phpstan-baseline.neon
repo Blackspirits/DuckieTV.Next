@@ -19,30 +19,6 @@ parameters:
 			path: app/Http/Controllers/CalendarController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$episodes\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/SeriesController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$episodes\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/SeriesController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$seasonnumber\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/SeriesController.php
-
-		-
-			message: '#^Negated boolean expression is always false\.$#'
-			identifier: booleanNot.alwaysFalse
-			count: 1
-			path: app/Http/Controllers/SeriesController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
