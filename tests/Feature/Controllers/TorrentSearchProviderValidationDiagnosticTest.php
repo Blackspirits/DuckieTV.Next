@@ -3,8 +3,11 @@
 namespace Tests\Feature\Controllers;
 
 use App\Http\Requests\Settings\UpdateTorrentSearchSettingsRequest;
+use App\Services\TorrentSearchService;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Validator;
+use ReflectionFunction;
 use Tests\TestCase;
 
 class TorrentSearchProviderValidationDiagnosticTest extends TestCase
@@ -13,7 +16,17 @@ class TorrentSearchProviderValidationDiagnosticTest extends TestCase
 
     public function test_diagnostic_provider_validation_paths(): void
     {
+        $service = app(TorrentSearchService::class);
         $rules = app(UpdateTorrentSearchSettingsRequest::class)->rules();
+        $providerRules = $rules['torrenting.searchprovider'];
+        $providerClosure = collect($providerRules)->first(fn ($rule) => $rule instanceof Closure);
+        $captured = $providerClosure instanceof Closure
+            ? (new ReflectionFunction($providerClosure))->getStaticVariables()
+            : [];
+
+        fwrite(STDERR, 'DIAG service_providers='.json_encode(array_keys($service->getSearchEngines())).PHP_EOL);
+        fwrite(STDERR, 'DIAG captured='.json_encode($captured).PHP_EOL);
+
         $payload = ['torrenting' => ['searchprovider' => '__missing__']];
         $validator = Validator::make($payload, $rules);
 
