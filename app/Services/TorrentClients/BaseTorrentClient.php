@@ -3,6 +3,8 @@
 namespace App\Services\TorrentClients;
 
 use App\Services\SettingsService;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
 
 /**
  * Base class for Torrent Client implementations.
@@ -15,6 +17,10 @@ use App\Services\SettingsService;
  */
 abstract class BaseTorrentClient implements TorrentClientInterface
 {
+    protected const CONNECT_TIMEOUT_SECONDS = 3;
+
+    protected const REQUEST_TIMEOUT_SECONDS = 8;
+
     /** @var array Internal configuration for the client */
     protected array $config = [];
 
@@ -44,6 +50,15 @@ abstract class BaseTorrentClient implements TorrentClientInterface
         foreach ($mappings as $key => $settingKey) {
             $this->config[$key] = $this->settings->get($settingKey);
         }
+    }
+
+    /**
+     * Build a bounded HTTP request for torrent-client API calls.
+     */
+    protected function http(): PendingRequest
+    {
+        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+            ->timeout(self::REQUEST_TIMEOUT_SECONDS);
     }
 
     /**

@@ -31,10 +31,10 @@
         <hr class="setting-divider">
 
         <h2>Update Period</h2>
-        <p>DuckieTV checks for updates every <strong>{{ settings('trakttv.update_period', 24) }}</strong> hours.<br>Default: 24 hours.</p>
+        <p>DuckieTV checks for updates every <strong>{{ settings()->get('trakttv.update_period', 24) }}</strong> hours.<br>Default: 24 hours.</p>
 
         <form>
-            Update Frequency (Hours): <input type='number' name="period" value="{{ settings('trakttv.update_period', 24) }}" min="1" max="24" />
+            Update Frequency (Hours): <input type='number' name="period" value="{{ settings()->get('trakttv.update_period', 24) }}" min="1" max="24" />
             <a class="btn btn-success" href="javascript:void(0)" onclick="alert('Save period not implemented')" style="float:right; margin-top:-10px;">
                 <i class="glyphicon glyphicon-floppy-save"></i>&nbsp; <span>Save</span>
             </a>

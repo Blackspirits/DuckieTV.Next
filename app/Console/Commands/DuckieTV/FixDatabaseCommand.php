@@ -20,7 +20,7 @@ class FixDatabaseCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Diagnose and fix SQLite database locking issues (enables WAL mode, clears stuck jobs)';
+    protected $description = 'Diagnose and fix SQLite database locking issues (enables WAL mode, releases expired queue reservations)';
 
     /**
      * The SQLite database files to check.
@@ -198,8 +198,24 @@ class FixDatabaseCommand extends Command
                 return;
             }
 
-            // Count stuck jobs (reserved but never completed)
-            $stuckCount = (int) $pdo->query('SELECT COUNT(*) FROM jobs WHERE reserved_at IS NOT NULL')->fetchColumn();
+            // Match Laravel's database queue reservation expiry rule. A fresh
+            // reservation may still belong to a live worker and must never be
+            // released by this recovery command.
+            $retryAfter = max(1, (int) config('queue.connections.database.retry_after', 90));
+            $staleBefore = time() - $retryAfter;
+
+            $staleStatement = $pdo->prepare(
+                'SELECT COUNT(*) FROM jobs WHERE reserved_at IS NOT NULL AND reserved_at <= :stale_before'
+            );
+            $staleStatement->execute(['stale_before' => $staleBefore]);
+            $staleCount = (int) $staleStatement->fetchColumn();
+
+            $activeStatement = $pdo->prepare(
+                'SELECT COUNT(*) FROM jobs WHERE reserved_at IS NOT NULL AND reserved_at > :stale_before'
+            );
+            $activeStatement->execute(['stale_before' => $staleBefore]);
+            $activeCount = (int) $activeStatement->fetchColumn();
+
             $pendingCount = (int) $pdo->query('SELECT COUNT(*) FROM jobs WHERE reserved_at IS NULL')->fetchColumn();
             $failedCount = 0;
 
@@ -208,20 +224,36 @@ class FixDatabaseCommand extends Command
                 $failedCount = (int) $pdo->query('SELECT COUNT(*) FROM failed_jobs')->fetchColumn();
             }
 
-            $this->components->twoColumnDetail('  Stuck jobs (reserved, never finished)', (string) $stuckCount);
+            $this->components->twoColumnDetail('  Active reserved jobs', (string) $activeCount);
+            $this->components->twoColumnDetail(
+                "  Expired reservations (>{$retryAfter}s)",
+                (string) $staleCount
+            );
             $this->components->twoColumnDetail('  Pending jobs', (string) $pendingCount);
             $this->components->twoColumnDetail('  Failed jobs', (string) $failedCount);
 
-            // Release stuck jobs
-            if ($stuckCount > 0) {
-                $pdo->exec('UPDATE jobs SET reserved_at = NULL, attempts = 0 WHERE reserved_at IS NOT NULL');
-                $this->components->twoColumnDetail('  Released stuck jobs', "<fg=green>{$stuckCount} released ✓</>");
+            // Release only reservations Laravel itself considers expired.
+            // Preserve attempts: resetting it would grant already-attempted work
+            // a fresh retry budget and break queue max-attempt semantics.
+            if ($staleCount > 0) {
+                $releaseStatement = $pdo->prepare(
+                    'UPDATE jobs SET reserved_at = NULL WHERE reserved_at IS NOT NULL AND reserved_at <= :stale_before'
+                );
+                $releaseStatement->execute(['stale_before' => $staleBefore]);
+
+                $this->components->twoColumnDetail(
+                    '  Released expired reservations',
+                    "<fg=green>{$staleCount} released ✓</>"
+                );
             }
 
-            // Flush all jobs if requested
-            if ($this->option('flush') && ($pendingCount + $stuckCount + $failedCount > 0)) {
+            $reservedCount = $activeCount + $staleCount;
+
+            // Flush all jobs if explicitly requested. This remains deliberately
+            // destructive and may include active reservations after confirmation.
+            if ($this->option('flush') && ($pendingCount + $reservedCount + $failedCount > 0)) {
                 $shouldFlush = $this->option('force') || $this->confirm(
-                    "Flush all {$pendingCount} pending, {$stuckCount} stuck, and {$failedCount} failed jobs?",
+                    "Flush all {$pendingCount} pending, {$reservedCount} reserved, and {$failedCount} failed jobs?",
                     false
                 );
 
@@ -239,7 +271,7 @@ class FixDatabaseCommand extends Command
 
                     $this->components->twoColumnDetail('  Flushed all jobs', '<fg=green>Done ✓</>');
                 }
-            } elseif (! $this->option('flush') && ($stuckCount + $failedCount > 0)) {
+            } elseif (! $this->option('flush') && ($staleCount + $failedCount > 0)) {
                 $this->line('');
                 $this->line('  <fg=yellow>Tip:</> Run with <fg=white>--flush</> to also clear all pending and failed jobs.');
             }

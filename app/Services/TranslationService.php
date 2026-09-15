@@ -7,6 +7,30 @@ use Illuminate\Support\Facades\File;
 class TranslationService
 {
     /**
+     * Resolve a historical DuckieTV locale key to the exact Laravel
+     * translation filename casing used by this application.
+     *
+     * Historical settings/backups store values such as "en_us" and "pt_pt",
+     * while the Laravel JSON files use "en_US" and "pt_PT".
+     */
+    public function resolveLocale(?string $locale): ?string
+    {
+        if ($locale === null || trim($locale) === '') {
+            return null;
+        }
+
+        $normalized = strtolower(str_replace('-', '_', trim($locale)));
+
+        foreach (array_keys($this->getAvailableLocales()) as $availableLocale) {
+            if (strtolower(str_replace('-', '_', $availableLocale)) === $normalized) {
+                return $availableLocale;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get a list of available locales from the lang directory.
      *
      * @return array<string, string> Array of locale code => locale name/code

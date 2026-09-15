@@ -1,21 +1,76 @@
+@php
+    $currentLocale = settings()->get('application.locale', 'en_us');
+    $currentLocale = is_string($currentLocale)
+        ? strtolower(str_replace('-', '_', $currentLocale))
+        : 'en_us';
+
+    $clientLocale = settings()->get('client.determinedlocale');
+    $clientLocale = is_string($clientLocale) && $clientLocale !== ''
+        ? strtolower(str_replace('-', '_', $clientLocale))
+        : null;
+
+    $availableLocales = [];
+    foreach ($locales as $locale => $name) {
+        $settingsLocale = strtolower(str_replace('-', '_', $locale));
+        $availableLocales[$settingsLocale] = [
+            'runtime' => $locale,
+            'name' => $name,
+        ];
+    }
+@endphp
+
 <div class="buttons languages">
-    <h2>Language
-        <span title="{{ settings('application.locale', 'en_US') }}">
-            <i class="flag flag-{{ settings('application.locale', 'en_US') }}"></i>
-        </span>
-    </h2>
+    <form data-section="language">
+        <input
+            type="hidden"
+            name="application.locale"
+            id="input_application_locale"
+            value="{{ $currentLocale }}"
+        >
 
-    <p>Select your preferred language for the DuckieTV interface.</p>
-    <p>Help us translate DuckieTV on GitHub!</p>
+        <h2>
+            {{ __('COMMON/language/hdr') }}
+            <span title="{{ $currentLocale }}">
+                <i class="flag flag-{{ $currentLocale }}"></i>
+            </span>
+        </h2>
 
-    @php
-        $currentLocale = settings('application.locale', 'en_US');
-    @endphp
+        <p>
+            {{ __('SETTINGS/LANGUAGE/desc') }}
+            {{ __('SETTINGS/LANGUAGE/desc2') }}
+            <a
+                href="https://github.com/SchizoDuckie/DuckieTV/wiki/Can-I-help-DuckieTV-with-Language-Translations%3F"
+                style="border:0; display:inline; padding:0; margin:0; text-decoration:underline"
+                target="_blank"
+                rel="noopener noreferrer"
+            >{{ __('SETTINGS/LANGUAGE/desc3') }}</a>
+        </p>
 
-    @foreach($locales as $locale => $name)
-        <a href="javascript:void(0)" onclick="alert('Set locale to {{ $locale }} not implemented')" class="btn {{ $currentLocale == $locale ? 'btn-success' : '' }}" style="margin: 2px;">
-            <i class="flag flag-{{ strtolower(substr($locale, 3)) }}"></i>
-            <span style='display-inline-block; top: -5px; position: relative;'>{{ $name }}</span>
-        </a>
-    @endforeach
+        @if($clientLocale !== null && isset($availableLocales[$clientLocale]))
+            <a
+                href="#"
+                onclick="setLanguageLocale('{{ $clientLocale }}'); return false;"
+                class="btn {{ $currentLocale === $clientLocale ? 'btn-success' : '' }}"
+            >
+                <i class="flag flag-{{ $clientLocale }}"></i>
+                <span style="position: relative; display:inline-block; top:-3px;">
+                    {{ __('SETTINGS/DISPLAY/locale-default/lbl') }} ({{ $clientLocale }})
+                </span>
+            </a>
+        @endif
+
+        @foreach($availableLocales as $locale => $details)
+            <a
+                href="#"
+                onclick="setLanguageLocale('{{ $locale }}'); return false;"
+                class="btn {{ $currentLocale === $locale ? 'btn-success' : '' }}"
+                style="margin: 2px;"
+            >
+                <i class="flag flag-{{ $locale }}"></i>
+                <span style="display:inline-block; top:-5px; position:relative;">
+                    {{ $details['name'] }}
+                </span>
+            </a>
+        @endforeach
+    </form>
 </div>

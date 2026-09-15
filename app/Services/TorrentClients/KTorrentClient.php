@@ -5,7 +5,6 @@ namespace App\Services\TorrentClients;
 use App\DTOs\TorrentData\KtorrentData;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -53,10 +52,12 @@ class KTorrentClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
+
         try {
             // First get the challenge
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/login/challenge.xml');
+            $response = $this->http()->get($this->getBaseUrl().'/login/challenge.xml');
             if (! $response->successful()) {
                 return false;
             }
@@ -65,7 +66,7 @@ class KTorrentClient extends BaseTorrentClient
             $challenge = $crawler->filter('challenge')->text();
 
             $sha = sha1($challenge.$this->config['password']);
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             /** @var \Illuminate\Http\Client\Response $loginResponse */
             $loginResponse = $request->post($this->getBaseUrl().'/login?page=interface.html', [
                 'username' => $this->config['username'],
@@ -74,8 +75,12 @@ class KTorrentClient extends BaseTorrentClient
                 'challenge' => $sha,
             ]);
 
-            return $loginResponse->successful();
+            $this->connected = $loginResponse->successful();
+
+            return $this->connected;
         } catch (Exception $e) {
+            $this->connected = false;
+
             return false;
         }
     }
@@ -87,8 +92,10 @@ class KTorrentClient extends BaseTorrentClient
     {
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/data/torrents.xml');
+            $response = $this->http()->get($this->getBaseUrl().'/data/torrents.xml');
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -103,6 +110,8 @@ class KTorrentClient extends BaseTorrentClient
                 'id' => $index,
             ])))->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
@@ -118,7 +127,7 @@ class KTorrentClient extends BaseTorrentClient
         }
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/action?start='.$id);
+            $response = $this->http()->get($this->getBaseUrl().'/action?start='.$id);
 
             return $response->successful();
         } catch (Exception $e) {
@@ -137,7 +146,7 @@ class KTorrentClient extends BaseTorrentClient
         }
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/action?stop='.$id);
+            $response = $this->http()->get($this->getBaseUrl().'/action?stop='.$id);
 
             return $response->successful();
         } catch (Exception $e) {
@@ -164,7 +173,7 @@ class KTorrentClient extends BaseTorrentClient
         }
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/action?remove='.$id);
+            $response = $this->http()->get($this->getBaseUrl().'/action?remove='.$id);
 
             return $response->successful();
         } catch (Exception $e) {
@@ -183,7 +192,7 @@ class KTorrentClient extends BaseTorrentClient
         }
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/data/torrent/files.xml?torrent='.$id);
+            $response = $this->http()->get($this->getBaseUrl().'/data/torrent/files.xml?torrent='.$id);
             if (! $response->successful()) {
                 return [];
             }
@@ -236,7 +245,7 @@ class KTorrentClient extends BaseTorrentClient
     {
         try {
             /** @var \Illuminate\Http\Client\Response $response */
-            $response = Http::get($this->getBaseUrl().'/action?load_torrent='.urlencode($magnet));
+            $response = $this->http()->get($this->getBaseUrl().'/action?load_torrent='.urlencode($magnet));
 
             return $response->successful();
         } catch (Exception $e) {

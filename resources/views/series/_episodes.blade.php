@@ -104,7 +104,7 @@
     @endif
   </table>
 
-  @if(settings('download.ratings') && isset($ratingPoints) && count($ratingPoints) > 0)
+  @if(settings()->get('download.ratings', true) && isset($ratingPoints) && count($ratingPoints) > 0)
     <h2 style='border-bottom:1px solid white;padding:5px;margin-top:10px'>{{ __('Episode Ratings') }}</h2>
     <div class="chart">
       @foreach($ratingPoints as $index => $point)

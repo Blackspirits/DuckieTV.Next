@@ -115,8 +115,17 @@ it('adds a favorite show with seasons and episodes', function () {
         ->and($serie->network)->toBe('AMC')
         ->and($serie->status)->toBe('ended')
         ->and($serie->genre)->toBe('drama|thriller')
+        ->and($serie->firstaired)->toBe(1200787200000)
+        ->and($serie->added)->toBeInt()
+        ->and($serie->lastupdated)->toBe('2024-01-01T00:00:00.000Z')
+        ->and($serie->getFirstAiredDate()?->toIso8601String())->toBe('2008-01-20T00:00:00+00:00')
         ->and($serie->actors)->toContain('Bryan Cranston (Walter White)')
         ->and($serie->actors)->toContain('Aaron Paul (Jesse Pinkman)');
+
+    $rawSerie = \Illuminate\Support\Facades\DB::table('series')->where('id', $serie->id)->first();
+    expect((int) $rawSerie->firstaired)->toBe(1200787200000)
+        ->and((int) $rawSerie->added)->toBe($serie->added)
+        ->and($rawSerie->lastupdated)->toBe('2024-01-01T00:00:00.000Z');
 
     // Check seasons created
     expect(Season::where('serie_id', $serie->id)->count())->toBe(1);
@@ -163,6 +172,38 @@ it('removes a favorite with cascading delete', function () {
     expect(Serie::count())->toBe(0)
         ->and(Season::count())->toBe(0)
         ->and(Episode::count())->toBe(0);
+});
+
+it('rolls back the entire favorite graph when episode processing fails', function () {
+    $data = makeTraktShowData();
+    $serie = $this->favorites->addFavorite($data);
+
+    $season = Season::where('serie_id', $serie->id)->firstOrFail();
+    $pilot = Episode::where('trakt_id', 62085)->firstOrFail();
+
+    $data['overview'] = 'This overview must roll back.';
+    $data['seasons'][0]['overview'] = 'This season overview must roll back.';
+    $data['seasons'][0]['episodes'][0]['title'] = 'Changed Pilot';
+    $data['seasons'][0]['episodes'] = [$data['seasons'][0]['episodes'][0]];
+
+    expect(fn () => $this->favorites->addFavorite(
+        $data,
+        [],
+        true,
+        function (): void {
+            throw new RuntimeException('Synthetic episode processing failure');
+        }
+    ))->toThrow(RuntimeException::class, 'Synthetic episode processing failure');
+
+    $serie->refresh();
+    $season->refresh();
+    $pilot->refresh();
+
+    expect($serie->overview)->toBe('A chemistry teacher turned meth maker.')
+        ->and($season->overview)->toBe('Season 1')
+        ->and($pilot->episodename)->toBe('Pilot')
+        ->and(Episode::where('serie_id', $serie->id)->count())->toBe(2)
+        ->and(Episode::where('trakt_id', 62086)->exists())->toBeTrue();
 });
 
 it('cleans up orphaned episodes on update', function () {

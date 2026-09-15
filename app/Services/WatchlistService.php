@@ -21,13 +21,14 @@ class WatchlistService
 
         try {
             $response = Http::get($url);
-            if (!($response instanceof \Illuminate\Http\Client\Response) || !$response->successful()) {
+            if (! ($response instanceof \Illuminate\Http\Client\Response) || ! $response->successful()) {
                 return [];
             }
 
             return $this->parseTables($response->body());
         } catch (\Exception $e) {
-            Log::error("Failed to fetch TorrentFreak Top 10: " . $e->getMessage());
+            Log::error('Failed to fetch TorrentFreak Top 10: '.$e->getMessage());
+
             return [];
         }
     }
@@ -41,44 +42,46 @@ class WatchlistService
         $crawler = new Crawler($html);
         $tables = $crawler->filter('table.css.hover');
         $titles = $crawler->filter('h2');
-        
+
         $output = [];
-        
+
         $tables->each(function (Crawler $table, $i) use ($titles, &$output) {
             $title = $titles->eq($i)->text();
             $movies = [];
 
             $table->filter('tbody tr')->each(function (Crawler $row) use (&$movies) {
                 $cols = $row->filter('td');
-                if ($cols->count() < 4) return;
+                if ($cols->count() < 4) {
+                    return;
+                }
 
                 try {
                     $movies[] = [
                         'rank' => $cols->eq(0)->text(),
                         'prevRank' => str_replace(['(', ')'], '', $cols->eq(1)->text()),
                         'title' => $cols->eq(2)->text(),
-                        'searchTitle' => $cols->eq(2)->filter('a')->count() > 0 
-                            ? $cols->eq(2)->filter('a')->text() 
+                        'searchTitle' => $cols->eq(2)->filter('a')->count() > 0
+                            ? $cols->eq(2)->filter('a')->text()
                             : $cols->eq(2)->text(),
-                        'rating' => $cols->eq(3)->filter('a')->count() > 0 
-                            ? $cols->eq(3)->filter('a')->first()->text() 
+                        'rating' => $cols->eq(3)->filter('a')->count() > 0
+                            ? $cols->eq(3)->filter('a')->first()->text()
                             : '?',
-                        'imdb' => $cols->eq(3)->filter('a')->count() > 0 
-                            ? $cols->eq(3)->filter('a')->first()->attr('href') 
+                        'imdb' => $cols->eq(3)->filter('a')->count() > 0
+                            ? $cols->eq(3)->filter('a')->first()->attr('href')
                             : '',
-                        'trailer' => $cols->eq(3)->filter('a')->count() == 2 
-                            ? $cols->eq(3)->filter('a')->eq(1)->attr('href') 
+                        'trailer' => $cols->eq(3)->filter('a')->count() == 2
+                            ? $cols->eq(3)->filter('a')->eq(1)->attr('href')
                             : '',
                     ];
                 } catch (\Exception $e) {
-                    Log::warning("Parse error in TorrentFreak row: " . $e->getMessage());
+                    Log::warning('Parse error in TorrentFreak row: '.$e->getMessage());
                 }
             });
 
-            if (!empty($movies)) {
+            if (! empty($movies)) {
                 array_unshift($output, [
                     'title' => $title,
-                    'top10' => $movies
+                    'top10' => $movies,
                 ]);
             }
         });

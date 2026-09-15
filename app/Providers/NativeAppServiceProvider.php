@@ -2,12 +2,14 @@
 
 namespace App\Providers;
 
+use App\Services\AutoDownloadLifecycleService;
+use App\Services\TraktUpdateLifecycleService;
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\ProvidesPhpIni;
-use Native\Desktop\Facades\MenuBar;
-use Native\Desktop\Facades\Menu;
-use Native\Desktop\Facades\Window;
 use Native\Desktop\Events\Windows\WindowMinimized;
+use Native\Desktop\Facades\Menu;
+use Native\Desktop\Facades\MenuBar;
+use Native\Desktop\Facades\Window;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
@@ -17,7 +19,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
-        // Reverb startup removed as per user request (switching to polling)
+        app(AutoDownloadLifecycleService::class)->dispatchStartupMaintenance();
+        app(TraktUpdateLifecycleService::class)->dispatchStartup();
 
         Window::open()
             ->titleBarHidden()
@@ -50,7 +53,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(WindowMinimized::class, function (WindowMinimized $event) {
             Window::close($event->id);
         });
-
     }
 
     /**
@@ -58,7 +60,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function phpIni(): array
     {
-        return [
-        ];
+        return [];
     }
 }

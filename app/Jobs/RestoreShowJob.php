@@ -19,20 +19,28 @@ class RestoreShowJob implements ShouldQueue
     public $timeout = 180; // 3 minutes per show should be plenty
 
     /**
-     * Retry up to 3 times with exponential backoff.
-     * SQLite contention can cause transient failures, especially when
-     * multiple jobs are being processed and the queue worker is busy.
+     * Rate-limit releases consume queue attempts. Use a fixed retry horizon
+     * instead of a tiny attempt budget so a shared Trakt block cannot exhaust
+     * every queued restore before the API becomes available again.
      */
-    public $tries = 3;
+    public int $tries = 0;
 
-    public $backoff = [5, 15]; // seconds between retries
+    /**
+     * Rate-limit releases are not exceptions, so they may wait as long as the
+     * remote block requires. Real execution failures remain bounded separately.
+     */
+    /** @psalm-suppress PossiblyUnusedProperty Laravel reads this queue payload contract reflectively. */
+    public int $maxExceptions = 3;
+
+    public $backoff = [5, 15];
 
     /**
      * Create a new job instance.
      */
     public function __construct(
         protected string $seriesId,
-        protected array $backupData
+        protected array $backupData,
+        protected bool $useTraktId = false
     ) {}
 
     /**
@@ -82,7 +90,7 @@ class RestoreShowJob implements ShouldQueue
                 $data['status'] = 'running';
 
                 Cache::put('backup_progress', $data);
-            });
+            }, $this->useTraktId);
 
         } catch (\App\Exceptions\RateLimitException $e) {
             Log::info("RestoreShowJob hit Trakt rate limit for ID {$this->seriesId}, releasing back to queue for {$e->retryAfter}s");

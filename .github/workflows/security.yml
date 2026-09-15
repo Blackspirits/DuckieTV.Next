@@ -8,33 +8,9 @@ on:
   schedule:
     - cron: '30 1 * * 0' # Run weekly
 
+# JavaScript CodeQL is managed by GitHub Code Scanning default setup.
+# Keep this workflow focused on repository-managed PHP/Larastan analysis.
 jobs:
-  # Job 1: Scan JavaScript/Blade assets with CodeQL
-  codeql-js:
-    name: CodeQL (JavaScript)
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      actions: read
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: javascript
-          # 'javascript' also scans TypeScript and limited logic in HTML/Blade files
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-
-  # Job 2: Scan Laravel/PHP with Larastan
   larastan-php:
     name: Larastan (PHP)
     runs-on: ubuntu-latest
@@ -44,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -58,7 +34,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -66,18 +42,17 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          composer install --prefer-dist --no-progress --no-suggest
+          composer install --prefer-dist --no-progress
 
       # Run Larastan and output to a .sarif file
       - name: Run Larastan Analysis
-        continue-on-error: true # Don't fail the build, just report alerts
-        run: |
-          ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif || true
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif
 
-      # Upload the PHP results to GitHub Security Tab
+      # Upload the PHP results to GitHub Security Tab even when analysis finds
+      # a new regression and exits non-zero.
       - name: Upload Analysis Results
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: phpstan-results.sarif
           category: php-larastan
-

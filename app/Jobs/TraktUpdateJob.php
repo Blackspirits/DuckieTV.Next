@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\RateLimitException;
 use App\Services\FavoritesService;
 use App\Services\SettingsService;
 use App\Services\TraktService;
@@ -44,9 +45,13 @@ class TraktUpdateJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The number of times the job may be attempted.
+     * Rate-limit releases consume reservation attempts, so maxTries must not
+     * cap them. Genuine uncaught failures remain bounded by maxExceptions.
      */
-    public int $tries = 1;
+    public int $tries = 0;
+
+    /** @psalm-suppress PossiblyUnusedProperty Laravel reads this queue payload contract reflectively. */
+    public int $maxExceptions = 1;
 
     /**
      * The maximum number of seconds the job can run.
@@ -64,8 +69,13 @@ class TraktUpdateJob implements ShouldQueue
      */
     public function handle(TraktService $trakt, FavoritesService $favorites, SettingsService $settings): void
     {
-        $this->checkForShowUpdates($trakt, $favorites, $settings);
-        $this->checkForTrendingUpdate($trakt, $settings);
+        try {
+            $this->checkForShowUpdates($trakt, $favorites, $settings);
+            $this->checkForTrendingUpdate($trakt, $settings);
+        } catch (RateLimitException $e) {
+            Log::info("TraktUpdate: Rate limited, releasing for {$e->retryAfter}s.");
+            $this->release($e->retryAfter);
+        }
     }
 
     /**
@@ -85,8 +95,18 @@ class TraktUpdateJob implements ShouldQueue
         $period = (int) $settings->get('trakt-update.period', 1); // hours
         $lastUpdated = (int) $settings->get('trakttv.lastupdated', 0);
 
+        // Match the historical Angular startup contract. On the first run it
+        // initialized the timestamp and waited one configured period before
+        // performing a full favorites refresh.
+        if ($lastUpdated <= 0) {
+            $settings->set('trakttv.lastupdated', $nowMs);
+            Log::info('TraktUpdate: Initialized first-run timestamp; deferring favorite refresh.');
+
+            return;
+        }
+
         // Check if enough time has passed
-        if ($lastUpdated > 0 && ($lastUpdated + ($period * 3600 * 1000)) > $nowMs) {
+        if (($lastUpdated + ($period * 3600 * 1000)) > $nowMs) {
             Log::info("TraktUpdate: Skipping, already done within the last {$period} hour(s).");
 
             return;
@@ -116,7 +136,7 @@ class TraktUpdateJob implements ShouldQueue
                 // Fetch summary only to check updated_at timestamp
                 $newSerie = $trakt->serie((string) $serie->trakt_id, null, true);
                 $timeUpdated = strtotime($newSerie['updated_at'] ?? '');
-                $serieLastUpdated = is_string($serie->lastupdated)
+                $serieLastUpdated = $serie->lastupdated
                     ? strtotime($serie->lastupdated)
                     : 0;
 
@@ -130,6 +150,8 @@ class TraktUpdateJob implements ShouldQueue
                 $fullSerie = $trakt->serie((string) $newSerie['trakt_id'], $newSerie);
                 $favorites->addFavorite($fullSerie, [], true);
                 $updatedCount++;
+            } catch (RateLimitException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 Log::error("TraktUpdate: Error updating {$serie->name} [Id={$serie->id}] [Trakt={$serie->trakt_id}]: {$e->getMessage()}");
             }
@@ -184,6 +206,8 @@ class TraktUpdateJob implements ShouldQueue
             $settings->set('trakttv.lastupdated.trending', $nowMs);
 
             Log::info('TraktUpdate: Trending cache updated.');
+        } catch (RateLimitException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('TraktUpdate: Failed to update trending cache: '.$e->getMessage());
         }

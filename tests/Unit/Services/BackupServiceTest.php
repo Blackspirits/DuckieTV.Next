@@ -23,6 +23,10 @@ class BackupServiceTest extends TestCase
         $backupData = [[], ['watched' => 1]];
 
         // Trakt Expectation
+        $trakt->shouldReceive('withThrottling')
+            ->once()
+            ->with(Mockery::type('callable'))
+            ->andReturnUsing(fn (callable $callback) => $callback());
         $trakt->shouldReceive('serie')->with('123')->andReturn(['title' => 'Show A', 'trakt_id' => 123]);
 
         // Favorites Expectation - The callback is internal, so we just expect the method call
@@ -31,10 +35,11 @@ class BackupServiceTest extends TestCase
         // Service
         $service = new BackupService($settings, $favorites, $trakt);
 
-        // Execute
+        // Execute as a post-1.1.5 Trakt-keyed backup. Legacy TVDB-keyed behavior
+        // is covered separately by BackupRoundTripTest.
         $result = $service->restoreShow($seriesId, $backupData, function ($percent, $msg) {
             // assertions on callback can be done here if needed
-        });
+        }, true);
 
         $this->assertTrue($result);
     }

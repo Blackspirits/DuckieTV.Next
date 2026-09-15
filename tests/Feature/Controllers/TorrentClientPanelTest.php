@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers;
 
+use App\Services\AutoDownloadLifecycleService;
 use App\Services\TorrentClients\TorrentClientInterface;
 use App\Services\TorrentClientService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +29,7 @@ class TorrentClientPanelTest extends TestCase
                 'infoHash' => 'abc123',
                 'name' => 'Test Torrent',
                 'progress' => 50,
-                'status' => 4, // downloading
+                'status' => 4,
             ]),
         ]);
 
@@ -52,22 +53,23 @@ class TorrentClientPanelTest extends TestCase
         $mockClient->shouldReceive('isConnected')->andReturn(true);
         $mockClient->shouldReceive('getTorrents')->andReturn([
             new \App\DTOs\TorrentData\TransmissionData([
-                'infoHash' => 'abc123',
+                'infoHash' => '0123456789abcdef0123456789abcdef01234567',
                 'name' => 'Test Torrent',
                 'progress' => 50,
-                'status' => 4, // downloading
-                'downloadSpeed' => 102400, // 100 kB/s
+                'status' => 4,
+                'downloadSpeed' => 102400,
                 'files' => [['name' => 'file1.mkv']],
             ]),
         ]);
-        // Add this expectation:
-        $mockClient->shouldReceive('getTorrentFiles')->with('abc123')->andReturn([['name' => 'file1.mkv']]);
+        $mockClient->shouldReceive('getTorrentFiles')
+            ->with('0123456789abcdef0123456789abcdef01234567')
+            ->andReturn([['name' => 'file1.mkv']]);
 
         $mockService = Mockery::mock(TorrentClientService::class);
         $mockService->shouldReceive('getActiveClient')->andReturn($mockClient);
         $this->app->instance(TorrentClientService::class, $mockService);
 
-        $response = $this->get(route('torrents.show', 'abc123'));
+        $response = $this->get(route('torrents.show', '0123456789ABCDEF0123456789ABCDEF01234567'));
 
         $response->assertStatus(200);
         $response->assertViewIs('torrents.show');
@@ -77,11 +79,13 @@ class TorrentClientPanelTest extends TestCase
         $response->assertSee('file1.mkv');
     }
 
-    public function test_status_endpoint_returns_json_with_torrents()
+    public function test_status_endpoint_returns_json_with_torrents_and_records_connected_state()
     {
         $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('getId')->once()->andReturn('mock-client');
         $mockClient->shouldReceive('getName')->andReturn('MockClient');
         $mockClient->shouldReceive('connect')->andReturn(true);
+        $mockClient->shouldReceive('isConnected')->andReturn(true);
         $mockClient->shouldReceive('getTorrents')->andReturn([
             new \App\DTOs\TorrentData\TransmissionData([
                 'infoHash' => 'abc123',
@@ -95,6 +99,13 @@ class TorrentClientPanelTest extends TestCase
         $mockService = Mockery::mock(TorrentClientService::class);
         $mockService->shouldReceive('getActiveClient')->andReturn($mockClient);
         $this->app->instance(TorrentClientService::class, $mockService);
+
+        $lifecycle = Mockery::mock(AutoDownloadLifecycleService::class);
+        $lifecycle->shouldReceive('recordClientConnectivity')
+            ->once()
+            ->with('mock-client', true)
+            ->andReturn(true);
+        $this->app->instance(AutoDownloadLifecycleService::class, $lifecycle);
 
         $response = $this->getJson(route('torrents.status'));
 
@@ -151,15 +162,23 @@ class TorrentClientPanelTest extends TestCase
         $response->assertSee('Torrents found:');
     }
 
-    public function test_status_endpoint_returns_error_when_connection_fails()
+    public function test_status_endpoint_returns_error_when_connection_fails_and_records_disconnected_state()
     {
         $mockClient = Mockery::mock(TorrentClientInterface::class);
+        $mockClient->shouldReceive('getId')->once()->andReturn('mock-client');
         $mockClient->shouldReceive('getName')->andReturn('MockClient');
         $mockClient->shouldReceive('connect')->andThrow(new \Exception('Connection Timeout'));
 
         $mockService = Mockery::mock(TorrentClientService::class);
         $mockService->shouldReceive('getActiveClient')->andReturn($mockClient);
         $this->app->instance(TorrentClientService::class, $mockService);
+
+        $lifecycle = Mockery::mock(AutoDownloadLifecycleService::class);
+        $lifecycle->shouldReceive('recordClientConnectivity')
+            ->once()
+            ->with('mock-client', false)
+            ->andReturn(false);
+        $this->app->instance(AutoDownloadLifecycleService::class, $lifecycle);
 
         $response = $this->getJson(route('torrents.status'));
 

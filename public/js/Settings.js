@@ -148,6 +148,123 @@ window.Settings = {
     }
 };
 
+// Historical Language settings changed both application.language and
+// application.locale, then reloaded so the translation table was rebuilt.
+// The server mirrors application.locale into application.language.
+window.setLanguageLocale = function (locale) {
+    const input = document.getElementById('input_application_locale');
+    if (!input) {
+        console.error('Language locale input not found.');
+        return;
+    }
+
+    input.value = String(locale).toLowerCase().replace('-', '_');
+
+    return window.Settings.save('language').then(data => {
+        if (data && data.success) {
+            window.location.reload();
+        }
+
+        return data;
+    });
+};
+
+window.SubtitleSettings = {
+    current: function () {
+        const root = document.getElementById('subtitle-settings');
+        if (!root) return [];
+
+        try {
+            const selected = JSON.parse(root.dataset.selectedLanguages || '[]');
+            return Array.isArray(selected) ? selected : [];
+        } catch (error) {
+            console.error('Invalid subtitle language state:', error);
+            return [];
+        }
+    },
+
+    save: function (languages) {
+        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        return fetch('/settings/subtitles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ 'subtitles.languages': languages })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    this.render(languages);
+                }
+
+                return data;
+            })
+            .catch(error => {
+                console.error('Error saving subtitle languages:', error);
+                alert('Error saving subtitle languages: ' + (error.message || 'Unknown error'));
+            });
+    },
+
+    render: function (languages) {
+        const root = document.getElementById('subtitle-settings');
+        if (!root) return;
+
+        root.dataset.selectedLanguages = JSON.stringify(languages);
+
+        const selectedNames = [];
+        root.querySelectorAll('[data-subtitle-code]').forEach(button => {
+            const enabled = languages.includes(button.dataset.subtitleCode);
+            button.classList.toggle('btn-success', enabled);
+
+            if (enabled) {
+                selectedNames.push(button.dataset.subtitleName);
+            }
+        });
+
+        const selectedLabel = document.getElementById('subtitle-selected-label');
+        const selectedText = document.getElementById('subtitle-selected-languages');
+        const selectedNone = document.getElementById('subtitle-selected-none');
+        const clearButton = document.getElementById('subtitle-clear-selection');
+        const hasSelection = languages.length > 0;
+
+        if (selectedLabel) selectedLabel.style.display = hasSelection ? '' : 'none';
+        if (selectedText) selectedText.textContent = selectedNames.join(', ');
+        if (selectedNone) selectedNone.style.display = hasSelection ? 'none' : '';
+        if (clearButton) clearButton.style.display = hasSelection ? 'inline-block' : 'none';
+    },
+
+    toggle: function (code) {
+        const languages = this.current();
+        const next = languages.includes(code)
+            ? languages.filter(language => language !== code)
+            : [...languages, code];
+
+        return this.save(next);
+    },
+
+    clear: function () {
+        return this.save([]);
+    }
+};
+
+window.toggleSubtitleLanguage = function (code) {
+    return window.SubtitleSettings.toggle(code);
+};
+
+window.clearSubtitleLanguages = function () {
+    return window.SubtitleSettings.clear();
+};
+
 // Global functions for Torrent Settings (accessed via inline onclick)
 window.updateTorrentSetting = function (key, value) {
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -165,7 +282,7 @@ window.updateTorrentSetting = function (key, value) {
         }
         return response.json();
     });
-}
+};
 
 window.toggleTorrent = function () {
     console.error("Use toggleTorrentSetting(newValue) instead.");
@@ -178,7 +295,7 @@ window.toggleTorrentSetting = function (key, newValue) {
         console.error('Failed to update setting', error);
         alert('Failed to update setting: ' + (error.message || 'Unknown error'));
     });
-}
+};
 
 window.setTorrentClient = function (clientKey) {
     window.updateTorrentSetting('torrenting.client', clientKey).then(() => {
@@ -203,131 +320,73 @@ window.setTorrentClient = function (clientKey) {
     });
 };
 
-window.updateSidebarClient = function (newClientName) {
+window.updateSidebarClient = function () {
     // Deprecated: now handled by SidePanel.update('/settings') in setTorrentClient
     if (window.SidePanel) {
         window.SidePanel.update('/settings');
     }
-}
+};
 
-// Global functions for Torrent Search Settings (moved from blade template)
-window.setSearchProvider = function (provider) {
-    window.updateTorrentSetting('torrenting.searchprovider', provider).then(() => {
-        // Manually update UI to avoid reloading panel (and cache issues)
-        const container = document.querySelector('[data-section="torrent-search"]');
-        if (container) {
-            const buttons = container.querySelectorAll('a[onclick^="setSearchProvider"]');
-            buttons.forEach(btn => {
-                const isMatch = btn.getAttribute('onclick').includes(`'${provider}'`);
+// Torrent Search settings use a distinct validation contract and endpoint.
+window.updateTorrentSearchSetting = function (key, value) {
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-                // Update class
-                if (isMatch) {
-                    btn.classList.add('btn-success');
-                } else {
-                    btn.classList.remove('btn-success');
-                }
-
-                // Update Icon
-                const existingIcon = btn.querySelector('.glyphicon');
-                if (existingIcon) existingIcon.remove();
-
-                if (isMatch) {
-                    const icon = document.createElement('i');
-                    icon.className = 'glyphicon glyphicon-ok';
-                    btn.insertBefore(icon, btn.firstChild);
-                    // Verify strong positioning if needed, but CSS might handle it? 
-                    // The blade template used inline styles for positioning 'absolute', which is messy to replicate perfectly without more logic.
-                    // Let's just fix the class and icon presence 90% of the way.
-                    // The blade has: <strong style='position: {{ $currentProvider == $provider ? "absolute; left: 60px" : "" }}'>
-                    const strong = btn.querySelector('strong');
-                    if (strong) strong.style.cssText = 'position: absolute; left: 60px';
-                } else {
-                    const strong = btn.querySelector('strong');
-                    if (strong) strong.style.cssText = '';
-                }
-            });
+    return fetch('/settings/torrent-search', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': token,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ [key]: value })
+    }).then(response => {
+        if (!response.ok) {
+            return response.json().then(err => Promise.reject(err));
         }
-    }).catch(error => {
-        console.error('Failed to set search provider:', error);
-        alert('Failed to set search provider: ' + (error.message || 'Unknown error'));
+
+        return response.json();
     });
-}
+};
+
+window.refreshTorrentSearchSettings = function () {
+    if (window.SidePanel && document.querySelector('[data-section="torrent-search"]')) {
+        return window.SidePanel.expand('/settings/torrent-search');
+    }
+
+    window.location.reload();
+    return undefined;
+};
+
+window.saveTorrentSearchSetting = function (key, value) {
+    return window.updateTorrentSearchSetting(key, value).then(data => {
+        if (data && data.success) {
+            window.refreshTorrentSearchSettings();
+        }
+
+        return data;
+    }).catch(error => {
+        console.error('Failed to save torrent search setting:', error);
+        alert('Failed to save torrent search setting: ' + (error.message || 'Unknown error'));
+    });
+};
+
+window.toggleTorrentSearchSetting = function (key, value) {
+    return window.saveTorrentSearchSetting(key, value);
+};
+
+window.numericSettingOrNull = function (inputId) {
+    const input = document.getElementById(inputId);
+    if (!input || input.value.trim() === '') {
+        return null;
+    }
+
+    return Number(input.value);
+};
+
+window.setSearchProvider = function (provider) {
+    return window.saveTorrentSearchSetting('torrenting.searchprovider', provider);
+};
 
 window.setSearchQuality = function (quality) {
-    window.updateTorrentSetting('torrenting.searchquality', quality).then(() => {
-        const container = document.querySelector('[data-section="torrent-search"]');
-        if (container) {
-            const buttons = container.querySelectorAll('a[onclick^="setSearchQuality"]');
-            buttons.forEach(btn => {
-                // quality can be empty string for 'All'
-                // onclick="setSearchQuality('')" vs onclick="setSearchQuality('FullHD')"
-                const isMatch = btn.getAttribute('onclick') === `setSearchQuality('${quality}')`;
-
-                if (isMatch) {
-                    btn.classList.add('btn-success');
-                } else {
-                    btn.classList.remove('btn-success');
-                }
-
-                const existingIcon = btn.querySelector('.glyphicon');
-                if (existingIcon) existingIcon.remove();
-
-                const strong = btn.querySelector('strong');
-
-                if (isMatch) {
-                    const icon = document.createElement('i');
-                    icon.className = 'glyphicon glyphicon-ok';
-                    btn.insertBefore(icon, btn.firstChild);
-                    if (strong) strong.style.paddingLeft = '30px';
-                } else {
-                    if (strong) strong.style.paddingLeft = '0';
-                }
-            });
-        }
-    }).catch(error => {
-        console.error('Failed to set search quality:', error);
-        alert('Failed to set search quality: ' + (error.message || 'Unknown error'));
-    });
-}
-
-// Reuse toggleSetting for generic settings if needed, but here we specifically map to torrent settings for now
-// or use a generic saveSetting if available. The blade template used 'saveSetting' locally defined.
-// taking 'toggleSetting' from the blade:
-window.toggleSetting = function (key, value) {
-    // The blade template used saveSetting('torrenting.requirekeywordsmode', ...) which calls /settings/torrent-search
-    // accessible via updateTorrentSetting (which posts to /settings/torrent -> TorrentController updates via SettingsService)
-    // Wait, the blade posted to /settings/torrent-search.
-    // Let's see if updateTorrentSetting posts to /settings/torrent.
-    // The blade's saveSetting posted to /settings/torrent-search.
-    // The SettingsController maps /settings/{section} to update().
-    // So posting to /settings/torrent-search updates settings passed in body.
-
-    // We can use Settings.save() style or just fetch directly.
-    // Let's use a generic helper consistent with updateTorrentSetting but targeting the section if needed.
-    // Actually updateTorrentSetting targets /settings/torrent.
-    // The search settings are in 'torrent-search' section but stored in same SettingsService.
-    // So /settings/torrent or /settings/torrent-search both work if they use SettingsService.
-
-    window.updateTorrentSetting(key, value).then(() => {
-        if (window.SidePanel && document.querySelector('[data-section="torrent-search"]')) {
-            window.SidePanel.expand('/settings/torrent-search');
-        } else {
-            window.location.reload();
-        }
-    }).catch(error => {
-        console.error('Failed to toggle setting:', error);
-        alert('Failed to toggle setting: ' + (error.message || 'Unknown error'));
-    });
-}
-
-// Also map saveSetting used in blade to updateTorrentSetting for consistency
-window.saveSetting = function (key, value) {
-    return window.updateTorrentSetting(key, value).then(() => {
-        if (window.SidePanel && document.querySelector('[data-section="torrent-search"]')) {
-            window.SidePanel.expand('/settings/torrent-search');
-        }
-    }).catch(error => {
-        console.error('Failed to save setting:', error);
-        alert('Failed to save setting: ' + (error.message || 'Unknown error'));
-    });
-}
+    return window.saveTorrentSearchSetting('torrenting.searchquality', quality);
+};
