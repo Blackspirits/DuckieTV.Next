@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Services\SubtitlesService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateSubtitlesSettingsRequest extends FormRequest
 {
@@ -13,9 +15,11 @@ class UpdateSubtitlesSettingsRequest extends FormRequest
 
     public function rules(): array
     {
+        $supportedLanguages = array_keys(app(SubtitlesService::class)->getLanguages());
+
         return [
-            'subtitles.languages' => 'array',
-            'subtitles.languages.*' => 'string|size:3', // ISO 639-2 codes usually 3 chars? locale keys are like 'en_US'
+            'subtitles.languages' => ['present', 'array'],
+            'subtitles.languages.*' => ['string', Rule::in($supportedLanguages)],
         ];
     }
 }

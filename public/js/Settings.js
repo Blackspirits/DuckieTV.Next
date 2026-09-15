@@ -169,6 +169,102 @@ window.setLanguageLocale = function (locale) {
     });
 };
 
+window.SubtitleSettings = {
+    current: function () {
+        const root = document.getElementById('subtitle-settings');
+        if (!root) return [];
+
+        try {
+            const selected = JSON.parse(root.dataset.selectedLanguages || '[]');
+            return Array.isArray(selected) ? selected : [];
+        } catch (error) {
+            console.error('Invalid subtitle language state:', error);
+            return [];
+        }
+    },
+
+    save: function (languages) {
+        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        return fetch('/settings/subtitles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ 'subtitles.languages': languages })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    this.render(languages);
+                }
+
+                return data;
+            })
+            .catch(error => {
+                console.error('Error saving subtitle languages:', error);
+                alert('Error saving subtitle languages: ' + (error.message || 'Unknown error'));
+            });
+    },
+
+    render: function (languages) {
+        const root = document.getElementById('subtitle-settings');
+        if (!root) return;
+
+        root.dataset.selectedLanguages = JSON.stringify(languages);
+
+        const selectedNames = [];
+        root.querySelectorAll('[data-subtitle-code]').forEach(button => {
+            const enabled = languages.includes(button.dataset.subtitleCode);
+            button.classList.toggle('btn-success', enabled);
+
+            if (enabled) {
+                selectedNames.push(button.dataset.subtitleName);
+            }
+        });
+
+        const selectedLabel = document.getElementById('subtitle-selected-label');
+        const selectedText = document.getElementById('subtitle-selected-languages');
+        const selectedNone = document.getElementById('subtitle-selected-none');
+        const clearButton = document.getElementById('subtitle-clear-selection');
+        const hasSelection = languages.length > 0;
+
+        if (selectedLabel) selectedLabel.style.display = hasSelection ? '' : 'none';
+        if (selectedText) selectedText.textContent = selectedNames.join(', ');
+        if (selectedNone) selectedNone.style.display = hasSelection ? 'none' : '';
+        if (clearButton) clearButton.style.display = hasSelection ? 'inline-block' : 'none';
+    },
+
+    toggle: function (code) {
+        const languages = this.current();
+        const next = languages.includes(code)
+            ? languages.filter(language => language !== code)
+            : [...languages, code];
+
+        return this.save(next);
+    },
+
+    clear: function () {
+        return this.save([]);
+    }
+};
+
+window.toggleSubtitleLanguage = function (code) {
+    return window.SubtitleSettings.toggle(code);
+};
+
+window.clearSubtitleLanguages = function () {
+    return window.SubtitleSettings.clear();
+};
+
 // Global functions for Torrent Settings (accessed via inline onclick)
 window.updateTorrentSetting = function (key, value) {
     const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
