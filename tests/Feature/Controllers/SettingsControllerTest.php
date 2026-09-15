@@ -45,6 +45,133 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('PROPER 1080p', $data['series']['123'][0]['customSearchString']);
     }
 
+    public function test_auto_backup_settings_view_uses_canonical_periods_and_real_action(): void
+    {
+        settings('autobackup.period', 'weekly');
+
+        $this->get(route('settings.show', 'backup'))
+            ->assertOk()
+            ->assertSee('BackupRestore.saveAutoBackupPeriod(this.value)', false)
+            ->assertSee('value="never"', false)
+            ->assertSee('value="daily"', false)
+            ->assertSee('value="weekly"', false)
+            ->assertSee('value="monthly"', false)
+            ->assertDontSee('Auto-backup setting not yet implemented')
+            ->assertDontSee('value="7"', false);
+    }
+
+    public function test_auto_backup_period_update_uses_canonical_contract(): void
+    {
+        $this->postJson(route('settings.update', 'backup'), [
+            'autobackup.period' => 'daily',
+        ])->assertOk()->assertJson(['success' => true]);
+
+        $this->assertSame('daily', settings()->get('autobackup.period'));
+
+        $this->postJson(route('settings.update', 'backup'), [
+            'autobackup.period' => '1',
+        ])->assertStatus(422);
+    }
+
+    public function test_auto_backup_status_initializes_historical_last_run(): void
+    {
+        settings('autobackup.period', 'daily');
+
+        $response = $this->getJson(route('settings.autobackup-status'))
+            ->assertOk()
+            ->assertJson([
+                'period' => 'daily',
+                'due' => false,
+            ]);
+
+        $data = $response->json();
+
+        $this->assertIsInt($data['last_run_ms']);
+        $this->assertIsInt($data['next_run_ms']);
+        $this->assertGreaterThan($data['last_run_ms'], $data['next_run_ms']);
+    }
+
+    public function test_auto_backup_status_does_not_initialize_during_other_maintenance(): void
+    {
+        settings('autobackup.period', 'daily');
+
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('acquire')->once()->andReturn(null);
+        $lock->shouldNotReceive('release');
+        $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+        $this->getJson(route('settings.autobackup-status'))
+            ->assertStatus(409)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ]);
+
+        $this->assertNull(settings()->get('autobackup.lastrun'));
+    }
+
+    public function test_auto_backup_export_records_last_run_after_successful_snapshot(): void
+    {
+        settings('autobackup.period', 'daily');
+        settings('autobackup.lastrun', 1);
+
+        Serie::create([
+            'name' => 'Auto Backup Me',
+            'trakt_id' => 909,
+        ]);
+
+        $response = $this->post(route('settings.autobackup-export'));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/json');
+
+        $this->assertStringContainsString(
+            'attachment; filename="DuckieTV ',
+            (string) $response->headers->get('content-disposition')
+        );
+
+        $lastRun = (int) settings()->get('autobackup.lastrun');
+        $data = json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertGreaterThan(1, $lastRun);
+        $this->assertSame($lastRun, (int) $data['settings']['autobackup.lastrun']);
+    }
+
+    public function test_auto_backup_export_rejects_concurrent_maintenance_without_advancing_schedule(): void
+    {
+        settings('autobackup.period', 'daily');
+        settings('autobackup.lastrun', 123);
+
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('acquire')->once()->andReturn(null);
+        $lock->shouldNotReceive('release');
+        $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+        $this->postJson(route('settings.autobackup-export'))
+            ->assertStatus(409)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ]);
+
+        $this->assertSame(123, (int) settings()->get('autobackup.lastrun'));
+    }
+
+    public function test_manual_backup_rejects_concurrent_database_maintenance(): void
+    {
+        $lock = Mockery::mock(DatabaseMaintenanceLock::class);
+        $lock->shouldReceive('acquire')->once()->andReturn(null);
+        $lock->shouldNotReceive('release');
+        $this->app->instance(DatabaseMaintenanceLock::class, $lock);
+
+        $this->getJson(route('settings.backup-export'))
+            ->assertStatus(409)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ]);
+    }
+
     public function test_standalone_wipe_endpoint_executes_database_wipe(): void
     {
         $maintenance = Mockery::mock(DatabaseMaintenanceService::class);

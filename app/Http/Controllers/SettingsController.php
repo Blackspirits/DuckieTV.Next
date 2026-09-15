@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Settings\ShowSettingsRequest;
 use App\Jobs\RefreshDatabaseJob;
 use App\Models\Serie;
+use App\Services\AutoBackupLifecycleService;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
 use App\Services\DatabaseMaintenanceService;
@@ -207,7 +208,71 @@ class SettingsController extends Controller
     /**
      * Download a manual backup in the historical DuckieTV JSON format.
      */
-    public function downloadBackup()
+    public function downloadBackup(DatabaseMaintenanceLock $maintenanceLock)
+    {
+        $lockOwner = $maintenanceLock->acquire();
+
+        if ($lockOwner === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ], 409);
+        }
+
+        try {
+            return $this->createBackupDownloadResponse();
+        } finally {
+            $maintenanceLock->release($lockOwner);
+        }
+    }
+
+    public function autoBackupStatus(
+        AutoBackupLifecycleService $autoBackup,
+        DatabaseMaintenanceLock $maintenanceLock
+    ) {
+        $lockOwner = $maintenanceLock->acquire();
+
+        if ($lockOwner === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ], 409);
+        }
+
+        try {
+            return response()->json($autoBackup->status());
+        } finally {
+            $maintenanceLock->release($lockOwner);
+        }
+    }
+
+    public function downloadAutoBackup(
+        DatabaseMaintenanceLock $maintenanceLock,
+        AutoBackupLifecycleService $autoBackup
+    ) {
+        $lockOwner = $maintenanceLock->acquire();
+
+        if ($lockOwner === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Another database maintenance operation is already running.',
+            ], 409);
+        }
+
+        try {
+            // Historical BackupDialogCtrl updates autobackup.lastrun immediately
+            // when Create Backup is chosen, before the asynchronous backup
+            // generation completes. Persist it first so the backup contains the
+            // new schedule anchor as the Angular version did.
+            $autoBackup->recordRun();
+
+            return $this->createBackupDownloadResponse();
+        } finally {
+            $maintenanceLock->release($lockOwner);
+        }
+    }
+
+    private function createBackupDownloadResponse(): \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
     {
         try {
             $json = json_encode(
@@ -217,7 +282,7 @@ class SettingsController extends Controller
 
             $filename = 'DuckieTV '.now()->format('Y-m-d').'.backup';
 
-            return response($json, 200, [
+            return response()->make($json, 200, [
                 'Content-Type' => 'application/json',
                 'Content-Disposition' => 'attachment; filename="'.$filename.'"',
                 'Cache-Control' => 'no-store, max-age=0',
