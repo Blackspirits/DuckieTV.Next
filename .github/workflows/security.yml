@@ -44,6 +44,10 @@ jobs:
         run: |
           composer install --prefer-dist --no-progress
 
+      - name: Diagnostic Larastan Table
+        continue-on-error: true
+        run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=table
+
       # Run Larastan and output to a .sarif file
       - name: Run Larastan Analysis
         run: ./vendor/bin/phpstan analyse --memory-limit=2G --error-format=sarif > phpstan-results.sarif
