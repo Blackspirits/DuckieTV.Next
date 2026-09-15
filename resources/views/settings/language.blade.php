@@ -1,7 +1,7 @@
 <div class="buttons languages">
     <h2>Language
-        <span title="{{ settings('application.locale', 'en_US') }}">
-            <i class="flag flag-{{ settings('application.locale', 'en_US') }}"></i>
+        <span title="{{ settings()->get('application.locale', 'en_US') }}">
+            <i class="flag flag-{{ settings()->get('application.locale', 'en_US') }}"></i>
         </span>
     </h2>
 
@@ -9,7 +9,7 @@
     <p>Help us translate DuckieTV on GitHub!</p>
 
     @php
-        $currentLocale = settings('application.locale', 'en_US');
+        $currentLocale = settings()->get('application.locale', 'en_US');
     @endphp
 
     @foreach($locales as $locale => $name)

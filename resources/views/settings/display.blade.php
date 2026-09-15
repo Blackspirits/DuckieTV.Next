@@ -1,7 +1,7 @@
 <div class="buttons">
     <form data-section="display">
         {{-- Top Sites --}}
-        @if(settings('display.has_top_sites', false))
+        @if(settings()->get('display.has_top_sites', false))
             <h2>
                 <span title="{{ settings('display.top_sites') ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
                     <i class="glyphicon {{ settings('display.top_sites') ? 'glyphicon-ok' : 'glyphicon-remove' }}" id="icon_display_top_sites"></i>
@@ -38,54 +38,54 @@
 
         {{-- Download Ratings --}}
         <h2>
-            <span title="{{ settings('display.show_ratings', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                <i class="glyphicon {{ settings('display.show_ratings', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            <span title="{{ settings()->get('display.show_ratings', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                <i class="glyphicon {{ settings()->get('display.show_ratings', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
             </span>
             {{ __('SETTINGS/DISPLAY/download-ratings/hdr') }}
         </h2>
         <p>{{ __('SETTINGS/DISPLAY/download-ratings/desc') }}</p>
-        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('display.show_ratings', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('display.show_ratings', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
         
-        <input type="checkbox" name="display.show_ratings" id="input_display_show_ratings" {{ settings('display.show_ratings', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-        <a href="#" onclick="document.getElementById('input_display_show_ratings').click(); return false;" class="btn btn-{{ settings('display.show_ratings', true) ? 'danger' : 'success' }}">
-            <i class="glyphicon glyphicon-{{ settings('display.show_ratings', true) ? 'remove' : 'ok' }}"></i> 
-            {{ settings('display.show_ratings', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+        <input type="checkbox" name="display.show_ratings" id="input_display_show_ratings" {{ settings()->get('display.show_ratings', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+        <a href="#" onclick="document.getElementById('input_display_show_ratings').click(); return false;" class="btn btn-{{ settings()->get('display.show_ratings', true) ? 'danger' : 'success' }}">
+            <i class="glyphicon glyphicon-{{ settings()->get('display.show_ratings', true) ? 'remove' : 'ok' }}"></i> 
+            {{ settings()->get('display.show_ratings', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
         </a>
 
         <hr class="setting-divider">
 
         {{-- Sidepanel Episodes Button Mode --}}
         <h2>
-            <span title="{{ settings('display.not_watched_eps_btn', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                <i class="glyphicon {{ settings('display.not_watched_eps_btn', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            <span title="{{ settings()->get('display.not_watched_eps_btn', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                <i class="glyphicon {{ settings()->get('display.not_watched_eps_btn', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
             </span>
             {{ __('SETTINGS/DISPLAY/notWatchedEpsBtn/hdr') }}
         </h2>
         <p>{{ __('SETTINGS/DISPLAY/notWatchedEpsBtn/desc') }}</p>
-        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('display.not_watched_eps_btn', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('display.not_watched_eps_btn', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
 
-        <input type="checkbox" name="display.not_watched_eps_btn" id="input_display_not_watched_eps_btn" {{ settings('display.not_watched_eps_btn', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-        <a href="#" onclick="document.getElementById('input_display_not_watched_eps_btn').click(); return false;" class="btn btn-{{ settings('display.not_watched_eps_btn', false) ? 'danger' : 'success' }}">
-            <i class="glyphicon glyphicon-{{ settings('display.not_watched_eps_btn', false) ? 'remove' : 'ok' }}"></i> 
-            {{ settings('display.not_watched_eps_btn', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+        <input type="checkbox" name="display.not_watched_eps_btn" id="input_display_not_watched_eps_btn" {{ settings()->get('display.not_watched_eps_btn', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+        <a href="#" onclick="document.getElementById('input_display_not_watched_eps_btn').click(); return false;" class="btn btn-{{ settings()->get('display.not_watched_eps_btn', false) ? 'danger' : 'success' }}">
+            <i class="glyphicon glyphicon-{{ settings()->get('display.not_watched_eps_btn', false) ? 'remove' : 'ok' }}"></i> 
+            {{ settings()->get('display.not_watched_eps_btn', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
         </a>
 
         <hr class="setting-divider">
 
         {{-- Sexy Poster Transitions --}}
         <h2>
-            <span title="{{ settings('display.transitions', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                <i class="glyphicon {{ settings('display.transitions', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            <span title="{{ settings()->get('display.transitions', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                <i class="glyphicon {{ settings()->get('display.transitions', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
             </span>
             {{ __('SETTINGS/DISPLAY/transitions/hdr') }}
         </h2>
         <p>{{ __('SETTINGS/DISPLAY/transitions/desc') }}</p>
-        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('display.transitions', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('display.transitions', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
 
-        <input type="checkbox" name="display.transitions" id="input_display_transitions" {{ settings('display.transitions', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-        <a href="#" onclick="document.getElementById('input_display_transitions').click(); return false;" class="btn btn-{{ settings('display.transitions', true) ? 'danger' : 'success' }}">
-            <i class="glyphicon glyphicon-{{ settings('display.transitions', true) ? 'remove' : 'ok' }}"></i> 
-            {{ settings('display.transitions', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+        <input type="checkbox" name="display.transitions" id="input_display_transitions" {{ settings()->get('display.transitions', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+        <a href="#" onclick="document.getElementById('input_display_transitions').click(); return false;" class="btn btn-{{ settings()->get('display.transitions', true) ? 'danger' : 'success' }}">
+            <i class="glyphicon glyphicon-{{ settings()->get('display.transitions', true) ? 'remove' : 'ok' }}"></i> 
+            {{ settings()->get('display.transitions', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
         </a>
 
         <hr class="setting-divider">
@@ -94,29 +94,29 @@
         <h2>{{ __('SETTINGS/DISPLAY/background-opacity/hdr') }}</h2>
         <ul class="list-unstyled btns">
             <li>
-                <p>{{ __('SETTINGS/DISPLAY/background-opacity/desc') }}</p> <span>{{ number_format(settings('display.bg_opacity', 0.8) * 100, 0) }}%</span>
-                <input type="range" name="display.bg_opacity" value="{{ settings('display.bg_opacity', 0.8) }}" min="0" max="1" step="0.05" onchange="Settings.save('display')" />
+                <p>{{ __('SETTINGS/DISPLAY/background-opacity/desc') }}</p> <span>{{ number_format(settings()->get('display.bg_opacity', 0.8) * 100, 0) }}%</span>
+                <input type="range" name="display.bg_opacity" value="{{ settings()->get('display.bg_opacity', 0.8) }}" min="0" max="1" step="0.05" onchange="Settings.save('display')" />
                 <strong style="float:left">0%</strong> <strong style='float:right'>100%</strong>
             </li>
         </ul>
         <br>
 
         {{-- Notifications --}}
-        @if(settings('display.has_notifications', true))
+        @if(settings()->get('display.has_notifications', true))
             <hr class="setting-divider">
             <h2>
-                <span title="{{ settings('notifications.enabled', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                    <i class="glyphicon {{ settings('notifications.enabled', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+                <span title="{{ settings()->get('notifications.enabled', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                    <i class="glyphicon {{ settings()->get('notifications.enabled', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
                 </span>
                 {{ __('SETTINGS/DISPLAY/notifications/hdr') }}
             </h2>
             <p>{{ __('SETTINGS/DISPLAY/notifications/desc') }}</p>
-            <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('notifications.enabled', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+            <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('notifications.enabled', true) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
 
-            <input type="checkbox" name="notifications.enabled" id="input_notifications_enabled" {{ settings('notifications.enabled', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-            <a href="#" onclick="document.getElementById('input_notifications_enabled').click(); return false;" class="btn btn-{{ settings('notifications.enabled', true) ? 'info' : 'success' }}">
-                <i class="glyphicon glyphicon-{{ settings('notifications.enabled', true) ? 'remove' : 'ok' }}"></i> 
-                {{ settings('notifications.enabled', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+            <input type="checkbox" name="notifications.enabled" id="input_notifications_enabled" {{ settings()->get('notifications.enabled', true) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+            <a href="#" onclick="document.getElementById('input_notifications_enabled').click(); return false;" class="btn btn-{{ settings()->get('notifications.enabled', true) ? 'info' : 'success' }}">
+                <i class="glyphicon glyphicon-{{ settings()->get('notifications.enabled', true) ? 'remove' : 'ok' }}"></i> 
+                {{ settings()->get('notifications.enabled', true) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
             </a>
         @endif
 
@@ -124,36 +124,36 @@
 
         {{-- Mixed case Font --}}
         <h2>
-            <span title="{{ settings('display.mixed_case', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                <i class="glyphicon {{ settings('display.mixed_case', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            <span title="{{ settings()->get('display.mixed_case', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                <i class="glyphicon {{ settings()->get('display.mixed_case', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
             </span>
             {{ __('SETTINGS/DISPLAY/mixedcase/hdr') }}
         </h2>
         <p>{{ __('SETTINGS/DISPLAY/mixedcase/desc') }}</p>
-        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('display.mixed_case', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('display.mixed_case', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
 
-        <input type="checkbox" name="display.mixed_case" id="input_display_mixed_case" {{ settings('display.mixed_case', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-        <a href="#" onclick="document.getElementById('input_display_mixed_case').click(); return false;" class="btn btn-{{ settings('display.mixed_case', false) ? 'info' : 'success' }}">
-            <i class="glyphicon glyphicon-{{ settings('display.mixed_case', false) ? 'remove' : 'ok' }}"></i> 
-            {{ settings('display.mixed_case', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+        <input type="checkbox" name="display.mixed_case" id="input_display_mixed_case" {{ settings()->get('display.mixed_case', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+        <a href="#" onclick="document.getElementById('input_display_mixed_case').click(); return false;" class="btn btn-{{ settings()->get('display.mixed_case', false) ? 'info' : 'success' }}">
+            <i class="glyphicon glyphicon-{{ settings()->get('display.mixed_case', false) ? 'remove' : 'ok' }}"></i> 
+            {{ settings()->get('display.mixed_case', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
         </a>
 
         <hr class="setting-divider">
         
         {{-- Permanent Cheatmode --}}
         <h2>
-            <span title="{{ settings('kc.always', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
-                <i class="glyphicon {{ settings('kc.always', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+            <span title="{{ settings()->get('kc.always', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+                <i class="glyphicon {{ settings()->get('kc.always', false) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
             </span>
             {{ __('SETTINGS/DISPLAY/cheatmode/hdr') }}
         </h2>
         <p>{{ __('SETTINGS/DISPLAY/cheatmode/desc') }}</p>
-        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings('kc.always', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
+        <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong> {{ settings()->get('kc.always', false) ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}</p>
 
-        <input type="checkbox" name="kc.always" id="input_kc_always" {{ settings('kc.always', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
-        <a href="#" onclick="document.getElementById('input_kc_always').click(); return false;" class="btn btn-{{ settings('kc.always', false) ? 'info' : 'success' }}">
-            <i class="glyphicon glyphicon-{{ settings('kc.always', false) ? 'remove' : 'ok' }}"></i> 
-            {{ settings('kc.always', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
+        <input type="checkbox" name="kc.always" id="input_kc_always" {{ settings()->get('kc.always', false) ? 'checked' : '' }} style="display:none" onchange="Settings.save('display')">
+        <a href="#" onclick="document.getElementById('input_kc_always').click(); return false;" class="btn btn-{{ settings()->get('kc.always', false) ? 'info' : 'success' }}">
+            <i class="glyphicon glyphicon-{{ settings()->get('kc.always', false) ? 'remove' : 'ok' }}"></i> 
+            {{ settings()->get('kc.always', false) ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
         </a>
     </form>
 </div>

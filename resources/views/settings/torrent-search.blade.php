@@ -6,7 +6,7 @@
         @inject('torrentSearchService', 'App\Services\TorrentSearchService')
         @php
             $providers = array_keys($torrentSearchService->getSearchEngines());
-            $currentProvider = settings('torrenting.searchprovider', 'ThePirateBay');
+            $currentProvider = settings()->get('torrenting.searchprovider', 'ThePirateBay');
         @endphp
 
         @foreach($providers as $provider)
@@ -30,7 +30,7 @@
 
         @php
             $qualities = ['UltraHD', 'FullHD', 'HD', 'SD', 'Low'];
-            $currentQuality = settings('torrenting.searchquality', '');
+            $currentQuality = settings()->get('torrenting.searchquality', '');
         @endphp
 
         <a href="javascript:void(0)" onclick="setSearchQuality('')" style="padding:10px; height:45px; margin: 2px;" class="btn {{ $currentQuality == '' ? 'btn-success' : '' }}">
