@@ -1,74 +1,101 @@
-<div class="buttons">
+<form data-section="calendar" class="buttons">
+    @php
+        $startSunday = (bool) settings()->get('calendar.startSunday', true);
+        $displayMode = (string) settings()->get('calendar.mode', 'date');
+        $showSpecials = (bool) settings()->get('calendar.show-specials', true);
+        $showDownloaded = (bool) settings()->get('calendar.show-downloaded', true);
+        $showEpisodeNumbers = (bool) settings()->get('calendar.show-episode-numbers', false);
+    @endphp
+
     <h2>
-        <span title="{{ settings('calendar.start_sunday', false) ? 'Week start: Sunday' : 'Week start: Monday' }}">
-            <i class="glyphicon glyphicon-indent-{{ settings('calendar.start_sunday', false) ? 'left' : 'right' }}"></i>
+        <span title="{{ $startSunday ? __('SETTINGS/CALENDAR/start-sun/tooltip') : __('SETTINGS/CALENDAR/start-mon/tooltip') }}">
+            <i class="glyphicon glyphicon-indent-{{ $startSunday ? 'left alert-info' : 'right alert-success' }}"></i>
         </span>
-        Week Start Day
+        {{ __('SETTINGS/CALENDAR/week/hdr') }}
     </h2>
-    <p>Toggle between Sunday/Monday for start day of the week below</p>
-    <p><strong>Current Setting:</strong> {{ settings('calendar.start_sunday', false) ? 'Week start: Sunday' : 'Week start: Monday' }}</p>
-    <a href="javascript:void(0)" onclick="alert('Toggle start day not implemented')" class="btn btn-{{ settings('calendar.start_sunday', false) ? 'success' : 'info' }}">
-        <i class="glyphicon glyphicon-indent-{{ settings('calendar.start_sunday', false) ? 'right' : 'left' }}"></i> 
-        {{ settings('calendar.start_sunday', false) ? 'Use Monday as start day-of-week' : 'Use Sunday as start day-of-week' }}
+    <p>{{ __('SETTINGS/CALENDAR/start/desc') }}</p>
+    <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong>
+        {{ $startSunday ? __('SETTINGS/CALENDAR/start-sun/tooltip') : __('SETTINGS/CALENDAR/start-mon/tooltip') }}
+    </p>
+    <input type="checkbox" name="calendar.startSunday" id="input_calendar_startSunday" {{ $startSunday ? 'checked' : '' }} style="display:none"
+        onchange="Settings.save('calendar').then(function(data) { if (data && data.success) { window.location.reload(); } })">
+    <a href="#" onclick="document.getElementById('input_calendar_startSunday').click(); return false;" class="btn btn-{{ $startSunday ? 'success' : 'info' }}">
+        <i class="glyphicon glyphicon-indent-{{ $startSunday ? 'right' : 'left' }}"></i>
+        {{ $startSunday ? __('SETTINGS/CALENDAR/start-mon/btn') : __('SETTINGS/CALENDAR/start-sun/btn') }}
     </a>
 
     <hr class="setting-divider">
 
     <h2>
-        <span title="{{ settings('calendar.mode') == 'date' ? 'Month' : 'Week' }}">
-            <i class="glyphicon {{ settings('calendar.mode') == 'date' ? 'glyphicon-calendar' : 'glyphicon-th-list' }}"></i>
+        <span title="{{ $displayMode === 'date' ? __('SETTINGS/CALENDAR/mode-month/tooltip') : __('SETTINGS/CALENDAR/mode-week/tooltip') }}">
+            <i class="glyphicon glyphicon-{{ $displayMode === 'date' ? 'calendar alert-success' : 'th-list alert-info' }}"></i>
         </span>
-        Calendar display mode
+        {{ __('SETTINGS/CALENDAR/mode/hdr') }}
     </h2>
-    <p>If you prefer the calendar to show only the current week/month, change it here</p>
-    <p><strong>Current Setting:</strong> {{ settings('calendar.mode') == 'date' ? 'Month' : 'Week' }}</p>
-    <a href="javascript:void(0)" onclick="alert('Toggle display mode not implemented')" class="btn btn-{{ settings('calendar.mode') == 'date' ? 'info' : 'success' }}">
-        <i class="glyphicon glyphicon-{{ settings('calendar.mode') == 'date' ? 'th-list' : 'calendar' }}"></i> 
-        {{ settings('calendar.mode') == 'date' ? 'Use one-week calendar' : 'Use month calendar' }}
+    <p>{{ __('SETTINGS/CALENDAR/mode/desc') }}</p>
+    <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong>
+        {{ $displayMode === 'date' ? __('SETTINGS/CALENDAR/mode-month/tooltip') : __('SETTINGS/CALENDAR/mode-week/tooltip') }}
+    </p>
+    <input type="hidden" name="calendar.mode" id="input_calendar_mode" value="{{ $displayMode }}">
+    <a href="#" onclick="const input = document.getElementById('input_calendar_mode'); input.value = input.value === 'date' ? 'week' : 'date'; Settings.save('calendar').then(function(data) { if (data && data.success) { window.location.reload(); } }); return false;" class="btn btn-{{ $displayMode === 'date' ? 'info' : 'success' }}">
+        <i class="glyphicon glyphicon-{{ $displayMode === 'date' ? 'th-list' : 'calendar' }}"></i>
+        {{ $displayMode === 'date' ? __('SETTINGS/CALENDAR/mode-week/btn') : __('SETTINGS/CALENDAR/mode-month/btn') }}
     </a>
 
     <hr class="setting-divider">
 
     <h2>
-        <span title="{{ settings('calendar.show_specials', true) ? 'Special episodes are shown' : 'Special episodes are hidden' }}">
-            <i class="glyphicon {{ settings('calendar.show_specials', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+        <span title="{{ $showSpecials ? __('SETTINGS/CALENDAR/specials-show/tooltip') : __('SETTINGS/CALENDAR/specials-hide/tooltip') }}">
+            <i class="glyphicon glyphicon-{{ $showSpecials ? 'ok alert-success' : 'remove alert-danger' }}"></i>
         </span>
-        specials on calendar
+        {{ __('SETTINGS/CALENDAR/specials/hdr') }}
     </h2>
-    <p>Choose to show or hide all the special episodes from the calendar</p>
-    <p><strong>Current Setting:</strong> {{ settings('calendar.show_specials', true) ? 'Special episodes are shown' : 'Special episodes are hidden' }}</p>
-    <a href="javascript:void(0)" onclick="alert('Toggle specials not implemented')" class="btn btn-{{ settings('calendar.show_specials', true) ? 'danger' : 'success' }}">
-        <i class="glyphicon glyphicon-{{ settings('calendar.show_specials', true) ? 'remove' : 'ok' }}"></i> 
-        {{ settings('calendar.show_specials', true) ? 'Hide specials episodes' : 'Show special episodes' }}
+    <p>{{ __('SETTINGS/CALENDAR/specials/desc') }}</p>
+    <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong>
+        {{ $showSpecials ? __('SETTINGS/CALENDAR/specials-show/tooltip') : __('SETTINGS/CALENDAR/specials-hide/tooltip') }}
+    </p>
+    <input type="checkbox" name="calendar.show-specials" id="input_calendar_show_specials" {{ $showSpecials ? 'checked' : '' }} style="display:none"
+        onchange="Settings.save('calendar').then(function(data) { if (data && data.success) { window.location.reload(); } })">
+    <a href="#" onclick="document.getElementById('input_calendar_show_specials').click(); return false;" class="btn btn-{{ $showSpecials ? 'danger' : 'success' }}">
+        <i class="glyphicon glyphicon-{{ $showSpecials ? 'remove' : 'ok' }}"></i>
+        {{ $showSpecials ? __('SETTINGS/CALENDAR/specials-hide/btn') : __('SETTINGS/CALENDAR/specials-show/btn') }}
     </a>
 
     <hr class="setting-divider">
 
     <h2>
-        <span title="{{ settings('calendar.show_downloaded', true) ? 'Enabled' : 'Disabled' }}">
-            <i class="glyphicon {{ settings('calendar.show_downloaded', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+        <span title="{{ $showDownloaded ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+            <i class="glyphicon glyphicon-{{ $showDownloaded ? 'ok alert-success' : 'remove alert-danger' }}"></i>
         </span>
-        Downloaded Episodes
+        {{ __('SETTINGS/CALENDAR/downloaded/hdr') }}
     </h2>
-    <p>Choose whether to highlight in green the downloaded episodes within the calendar</p>
-    <p><strong>Current Setting:</strong> {{ settings('calendar.show_downloaded', true) ? 'Enabled' : 'Disabled' }}</p>
-    <a href="javascript:void(0)" onclick="alert('Toggle downloaded not implemented')" class="btn btn-{{ settings('calendar.show_downloaded', true) ? 'danger' : 'success' }}">
-        <i class="glyphicon glyphicon-{{ settings('calendar.show_downloaded', true) ? 'remove' : 'ok' }}"></i> 
-        {{ settings('calendar.show_downloaded', true) ? 'Click to disable' : 'Click to enable' }}
+    <p>{{ __('SETTINGS/CALENDAR/downloaded/desc') }}</p>
+    <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong>
+        {{ $showDownloaded ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}
+    </p>
+    <input type="checkbox" name="calendar.show-downloaded" id="input_calendar_show_downloaded" {{ $showDownloaded ? 'checked' : '' }} style="display:none"
+        onchange="Settings.save('calendar').then(function(data) { if (data && data.success) { if (window.Calendar) { window.Calendar.refresh(); } if (window.SidePanel) { window.SidePanel.expand('/settings/calendar'); } } })">
+    <a href="#" onclick="document.getElementById('input_calendar_show_downloaded').click(); return false;" class="btn btn-{{ $showDownloaded ? 'danger' : 'success' }}">
+        <i class="glyphicon glyphicon-{{ $showDownloaded ? 'remove' : 'ok' }}"></i>
+        {{ $showDownloaded ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
     </a>
 
     <hr class="setting-divider">
 
     <h2>
-        <span title="{{ settings('calendar.show_episode_numbers', true) ? 'Enabled' : 'Disabled' }}">
-            <i class="glyphicon {{ settings('calendar.show_episode_numbers', true) ? 'glyphicon-ok' : 'glyphicon-remove' }}"></i>
+        <span title="{{ $showEpisodeNumbers ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}">
+            <i class="glyphicon glyphicon-{{ $showEpisodeNumbers ? 'ok alert-success' : 'remove alert-danger' }}"></i>
         </span>
-        Episode numbers on calendar
+        {{ __('SETTINGS/CALENDAR/show-episode-numbers/hdr') }}
     </h2>
-    <p>Choose to show or hide the episode numbers from the episode titles on the calendar.</p>
-    <p><strong>Current Setting:</strong> {{ settings('calendar.show_episode_numbers', true) ? 'Enabled' : 'Disabled' }}</p>
-    <a href="javascript:void(0)" onclick="alert('Toggle episode numbers not implemented')" class="btn btn-{{ settings('calendar.show_episode_numbers', true) ? 'danger' : 'success' }}">
-        <i class="glyphicon glyphicon-{{ settings('calendar.show_episode_numbers', true) ? 'remove' : 'ok' }}"></i> 
-        {{ settings('calendar.show_episode_numbers', true) ? 'Click to disable' : 'Click to enable' }}
+    <p>{{ __('SETTINGS/CALENDAR/show-episode-numbers/desc') }}</p>
+    <p><strong>{{ __('COMMON/current-setting/hdr') }}</strong>
+        {{ $showEpisodeNumbers ? __('COMMON/enabled/lbl') : __('COMMON/disabled/lbl') }}
+    </p>
+    <input type="checkbox" name="calendar.show-episode-numbers" id="input_calendar_show_episode_numbers" {{ $showEpisodeNumbers ? 'checked' : '' }} style="display:none"
+        onchange="Settings.save('calendar').then(function(data) { if (data && data.success) { if (window.Calendar) { window.Calendar.refresh(); } if (window.SidePanel) { window.SidePanel.expand('/settings/calendar'); } } })">
+    <a href="#" onclick="document.getElementById('input_calendar_show_episode_numbers').click(); return false;" class="btn btn-{{ $showEpisodeNumbers ? 'danger' : 'success' }}">
+        <i class="glyphicon glyphicon-{{ $showEpisodeNumbers ? 'remove' : 'ok' }}"></i>
+        {{ $showEpisodeNumbers ? __('COMMON/disable/btn') : __('COMMON/enable/btn') }}
     </a>
-</div>
+</form>
