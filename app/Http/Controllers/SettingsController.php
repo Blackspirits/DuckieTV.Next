@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Settings\ShowSettingsRequest;
 use App\Jobs\RefreshDatabaseJob;
+use App\Models\Jackett;
 use App\Models\Serie;
+use App\Rules\ValidJackettTorznabEndpoint;
 use App\Services\AutoBackupLifecycleService;
 use App\Services\AutoDownloadLifecycleService;
 use App\Services\DatabaseMaintenanceLock;
@@ -12,8 +14,13 @@ use App\Services\DatabaseMaintenanceService;
 use App\Services\DatabaseRefreshProgressService;
 use App\Services\SubtitlesService;
 use App\Services\TorrentClientService;
+use App\Services\TorrentSearchService;
 use App\Services\TranslationService;
+use App\Support\JackettTorznabEndpoint;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SettingsController extends Controller
@@ -90,6 +97,23 @@ class SettingsController extends Controller
 
         if ($section === 'torrent') {
             $data['supportedClients'] = $this->getSupportedClients();
+        }
+
+        if ($section === 'jackett-search') {
+            // API keys are deliberately excluded so they can never be rendered
+            // back into the settings HTML.
+            $data['jackettIndexers'] = Jackett::query()
+                ->orderBy('id')
+                ->get(['id', 'name', 'torznab', 'enabled', 'torznabEnabled'])
+                ->each(function (Jackett $jackett): void {
+                    // Historical rows may contain query credentials or otherwise
+                    // unsafe endpoints. Never echo the raw stored value.
+                    $jackett->setAttribute(
+                        'torznab',
+                        JackettTorznabEndpoint::displayValue((string) $jackett->torznab)
+                    );
+                });
+            $data['defaultProvider'] = settings()->get('torrenting.searchprovider', 'ThePirateBay');
         }
 
         $data['section'] = $section;
@@ -292,6 +316,156 @@ class SettingsController extends Controller
         }
 
         return response()->json($res);
+    }
+
+    public function storeJackettIndexer(Request $request): JsonResponse
+    {
+        $payload = [
+            'name' => is_string($request->input('name')) ? trim($request->input('name')) : $request->input('name'),
+            'torznab' => is_string($request->input('torznab')) ? trim($request->input('torznab')) : $request->input('torznab'),
+            'apiKey' => is_string($request->input('apiKey')) ? trim($request->input('apiKey')) : $request->input('apiKey'),
+            'enabled' => $request->input('enabled'),
+        ];
+
+        $validator = Validator::make($payload, [
+            'name' => ['required', 'string', 'max:40', Rule::unique('jackett', 'name')],
+            'torznab' => ['required', 'string', 'max:200', new ValidJackettTorznabEndpoint],
+            'apiKey' => ['required', 'string', 'max:40'],
+            'enabled' => ['sometimes', 'boolean'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        $jackett = Jackett::create([
+            'name' => trim((string) $validated['name']),
+            'torznab' => JackettTorznabEndpoint::sanitize((string) $validated['torznab']),
+            'enabled' => (bool) ($validated['enabled'] ?? false) ? 1 : 0,
+            'torznabEnabled' => 1,
+            'apiKey' => trim((string) $validated['apiKey']),
+            'json' => null,
+        ]);
+
+        $this->invalidateTorrentSearchRegistry();
+
+        return response()->json([
+            'success' => true,
+            'id' => $jackett->id,
+            'name' => $jackett->name,
+            'enabled' => (int) $jackett->enabled === 1,
+        ], 201);
+    }
+
+    public function updateJackettIndexer(Request $request, Jackett $jackett): JsonResponse
+    {
+        if ((int) $jackett->torznabEnabled !== 1) {
+            return $this->unsupportedLegacyJackettResponse();
+        }
+
+        $payload = [];
+        foreach (['torznab', 'apiKey', 'enabled'] as $key) {
+            if (! $request->exists($key)) {
+                continue;
+            }
+
+            $value = $request->input($key);
+            $payload[$key] = in_array($key, ['torznab', 'apiKey'], true) && is_string($value)
+                ? trim($value)
+                : $value;
+        }
+
+        $validator = Validator::make($payload, [
+            'torznab' => ['sometimes', 'required', 'string', 'max:200', new ValidJackettTorznabEndpoint],
+            'apiKey' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'enabled' => ['sometimes', 'boolean'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if (array_key_exists('enabled', $validated)
+            && ! (bool) $validated['enabled']
+            && $this->isCurrentJackettProvider($jackett)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Choose a different default search provider before disabling this Jackett indexer.',
+            ], 422);
+        }
+
+        if (array_key_exists('torznab', $validated)) {
+            $jackett->torznab = JackettTorznabEndpoint::sanitize((string) $validated['torznab']);
+        }
+
+        if (array_key_exists('apiKey', $validated)
+            && is_string($validated['apiKey'])
+            && trim($validated['apiKey']) !== '') {
+            $jackett->apiKey = trim($validated['apiKey']);
+        }
+
+        if (array_key_exists('enabled', $validated)) {
+            $jackett->enabled = (bool) $validated['enabled'] ? 1 : 0;
+        }
+
+        $jackett->save();
+        $this->invalidateTorrentSearchRegistry();
+
+        return response()->json([
+            'success' => true,
+            'id' => $jackett->id,
+            'name' => $jackett->name,
+            'enabled' => (int) $jackett->enabled === 1,
+        ]);
+    }
+
+    public function destroyJackettIndexer(Jackett $jackett): JsonResponse
+    {
+        if ((int) $jackett->torznabEnabled !== 1) {
+            return $this->unsupportedLegacyJackettResponse();
+        }
+
+        if ($this->isCurrentJackettProvider($jackett)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Choose a different default search provider before deleting this Jackett indexer.',
+            ], 422);
+        }
+
+        $jackett->delete();
+        $this->invalidateTorrentSearchRegistry();
+
+        return response()->json(['success' => true]);
+    }
+
+    private function isCurrentJackettProvider(Jackett $jackett): bool
+    {
+        return (string) settings()->get('torrenting.searchprovider', 'ThePirateBay') === (string) $jackett->name;
+    }
+
+    private function invalidateTorrentSearchRegistry(): void
+    {
+        app()->forgetInstance(TorrentSearchService::class);
+    }
+
+    private function unsupportedLegacyJackettResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'This historical Jackett Admin API configuration is preserved but is not managed by the Torznab settings interface.',
+        ], 422);
     }
 
     /**

@@ -162,6 +162,32 @@ class JackettTorznabRuntimeTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_transport_exception_does_not_leak_api_key_or_endpoint_query(): void
+    {
+        $jackett = Jackett::create([
+            'name' => 'Offline Indexer',
+            'torznab' => 'http://localhost:9117/torznab/offline',
+            'enabled' => 1,
+            'torznabEnabled' => 1,
+            'apiKey' => 'transport-secret',
+        ]);
+
+        Http::fake(function (): never {
+            throw new \RuntimeException(
+                'Connection failed for http://localhost:9117/torznab/offline/api?apikey=transport-secret'
+            );
+        });
+
+        try {
+            (new JackettTorznabEngine($jackett))->search('test');
+            $this->fail('Expected transport failure.');
+        } catch (\Exception $e) {
+            $this->assertSame('Jackett Torznab search failed for Offline Indexer.', $e->getMessage());
+            $this->assertStringNotContainsString('transport-secret', $e->getMessage());
+            $this->assertStringNotContainsString('apikey=', $e->getMessage());
+        }
+    }
+
     public function test_invalid_xml_fails_without_leaking_endpoint_credentials(): void
     {
         $jackett = Jackett::create([

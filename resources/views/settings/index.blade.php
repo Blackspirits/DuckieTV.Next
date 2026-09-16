@@ -91,6 +91,13 @@
                     </a>
                 </td>
             </tr>
+            <tr>
+                <td colspan="2">
+                    <a href="#" data-sidepanel-expand="{{ route('settings.show', 'jackett-search') }}">
+                        <i class="glyphicon glyphicon-link"></i><strong>Jackett / Torznab</strong>
+                    </a>
+                </td>
+            </tr>
         @endif
 
         <tr>
