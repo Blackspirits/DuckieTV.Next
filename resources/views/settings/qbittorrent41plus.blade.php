@@ -24,25 +24,17 @@
 
         <div class="form-group">
             <label>{{ __('COMMON/port/lbl') }}</label>
-            <input type="number" name="qbittorrent32plus.port" class="form-control" value="{{ settings('qbittorrent32plus.port') }}" required min="0" max="65535">
+            <input type="number" name="qbittorrent32plus.port" class="form-control" value="{{ settings('qbittorrent32plus.port') }}" required min="1" max="65535">
         </div>
 
-        <div class="checkbox">
-            <label>
-                <input type="checkbox" name="qbittorrent32plus.use_auth" id="qbittorrent_use_auth" {{ settings('qbittorrent32plus.use_auth') ? 'checked' : '' }} onchange="document.getElementById('qbittorrent_auth_fields').style.display = this.checked ? 'block' : 'none'"> {{ __('COMMON/authentication/lbl') }}
-            </label>
+        <div class="form-group">
+            <label>{{ __('COMMON/username/lbl') }}</label>
+            <input type="text" name="qbittorrent32plus.username" class="form-control" value="{{ settings('qbittorrent32plus.username') }}">
         </div>
 
-        <div id="qbittorrent_auth_fields" style="display: {{ settings('qbittorrent32plus.use_auth') ? 'block' : 'none' }}">
-            <div class="form-group">
-                <label>{{ __('COMMON/username/lbl') }}</label>
-                <input type="text" name="qbittorrent32plus.username" class="form-control" value="{{ settings('qbittorrent32plus.username') }}">
-            </div>
-
-            <div class="form-group">
-                <label>{{ __('COMMON/password/lbl') }}</label>
-                <input type="password" name="qbittorrent32plus.password" class="form-control" value="{{ settings('qbittorrent32plus.password') }}">
-            </div>
+        <div class="form-group">
+            <label>{{ __('COMMON/password/lbl') }}</label>
+            <input type="password" name="qbittorrent32plus.password" class="form-control" value="{{ settings('qbittorrent32plus.password') }}">
         </div>
 
         <button type="submit" class="btn btn-primary">{{ __('COMMON/test-save/btn') }}</button>
