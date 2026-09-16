@@ -138,6 +138,28 @@ class SettingsController extends Controller
         $formRequest = app($allowed[$section]);
         $rules = $formRequest->rules();
 
+        // Once a field is explicitly present, "sometimes" is redundant and can
+        // prevent its real rules from running. Laravel 12's nested presence
+        // check uses the literal "__missing__" as an internal sentinel, so a
+        // submitted value with that exact string can otherwise be mistaken for
+        // an absent dotted field. Strip only the presence modifier from fields
+        // that are actually present; absent fields keep partial-update semantics.
+        foreach ($rules as $key => $rule) {
+            if (! \Illuminate\Support\Arr::has($expanded, $key)) {
+                continue;
+            }
+
+            if (is_string($rule)) {
+                $rule = preg_replace('/(^|\\|)sometimes(\\||$)/', '$1', $rule);
+                $rules[$key] = trim((string) $rule, '|');
+            } elseif (is_array($rule)) {
+                $rules[$key] = array_values(array_filter(
+                    $rule,
+                    static fn ($rulePart): bool => $rulePart !== 'sometimes'
+                ));
+            }
+        }
+
         $validator = \Illuminate\Support\Facades\Validator::make($expanded, $rules);
 
         if ($validator->fails()) {
@@ -150,22 +172,35 @@ class SettingsController extends Controller
 
         $validated = $validator->validated();
 
-        // Ensure booleans are included even if missing from request (unchecked checkboxes)
-        // We use a heuristic: only default to false if other fields with the same prefix are present.
-        // This avoids resetting unrelated settings during partial updates (e.g. toggling a single global switch).
+        // Laravel normalizes an empty string to null before validation. The
+        // historical Torrent Search contract stores "" to mean all qualities.
+        if (
+            $section === 'torrent-search'
+            && \Illuminate\Support\Arr::has($validated, 'torrenting.searchquality')
+            && \Illuminate\Support\Arr::get($validated, 'torrenting.searchquality') === null
+        ) {
+            \Illuminate\Support\Arr::set($validated, 'torrenting.searchquality', '');
+        }
+
+        // Ensure booleans are included even if missing from request (unchecked checkboxes).
+        // A `sometimes` rule explicitly means an absent field is a partial update and
+        // must not overwrite a sibling boolean merely because it shares a prefix.
         $rawData = $request->all();
         foreach ($rules as $key => $rule) {
-            if ($rule === 'boolean' || (is_array($rule) && in_array('boolean', $rule))) {
-                if (! \Illuminate\Support\Arr::has($validated, $key)) {
-                    $prefix = str_contains($key, '.') ? explode('.', $key)[0] : $key;
-                    // Check if there are other fields in the same configuration group present
-                    $otherFieldsInGroup = collect($rawData)->keys()
-                        ->filter(fn ($k) => str_starts_with($k, $prefix.'.'))
-                        ->count();
+            $ruleList = is_array($rule) ? $rule : explode('|', $rule);
+            if (in_array('sometimes', $ruleList, true) || ! in_array('boolean', $ruleList, true)) {
+                continue;
+            }
 
-                    if ($otherFieldsInGroup > 0) {
-                        \Illuminate\Support\Arr::set($validated, $key, false);
-                    }
+            if (! \Illuminate\Support\Arr::has($validated, $key)) {
+                $prefix = str_contains($key, '.') ? explode('.', $key)[0] : $key;
+                // Check if there are other fields in the same configuration group present
+                $otherFieldsInGroup = collect($rawData)->keys()
+                    ->filter(fn ($k) => str_starts_with($k, $prefix.'.'))
+                    ->count();
+
+                if ($otherFieldsInGroup > 0) {
+                    \Illuminate\Support\Arr::set($validated, $key, false);
                 }
             }
         }

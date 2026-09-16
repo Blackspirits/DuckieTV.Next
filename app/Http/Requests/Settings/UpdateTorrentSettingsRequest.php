@@ -16,11 +16,6 @@ class UpdateTorrentSettingsRequest extends FormRequest
         $rules = [
             'torrenting.enabled' => 'sometimes|boolean',
             'torrenting.client' => 'sometimes|required|string',
-            'torrenting.require_keywords' => 'sometimes|nullable|string',
-            'torrenting.require_keywords_enabled' => 'sometimes|boolean',
-            'torrenting.require_keywords_mode_or' => 'sometimes|boolean',
-            'torrenting.searchprovider' => 'sometimes|nullable|string',
-            'torrenting.searchquality' => 'sometimes|nullable|string',
             'torrenting.streaming' => 'sometimes|boolean',
             'torrenting.directory' => 'sometimes|boolean',
         ];
