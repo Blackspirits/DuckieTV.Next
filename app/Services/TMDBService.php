@@ -56,7 +56,10 @@ class TMDBService
                 'fanart' => $this->getImageUrl($data['backdrop_path'] ?? null, 'original'),
             ];
         } catch (\Exception $e) {
-            Log::warning("TMDB: Exception fetching images for show {$tmdbId}: {$e->getMessage()}");
+            Log::warning('TMDB: Transport failure while fetching show images.', [
+                'tmdb_id' => $tmdbId,
+                'exception' => $e::class,
+            ]);
 
             return ['poster' => null, 'fanart' => null];
         }
