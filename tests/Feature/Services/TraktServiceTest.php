@@ -259,6 +259,56 @@ it('does not log oauth response body on token renewal failure', function () {
         });
 });
 
+it('does not expose generic Trakt response bodies in exceptions', function () {
+    $sensitive = 'generic_trakt_response_secret';
+
+    Http::fake([
+        'api.trakt.tv/search/show*' => Http::response($sensitive, 400),
+    ]);
+
+    try {
+        $this->trakt->search('Breaking Bad');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())->toBe('Trakt API request failed (HTTP 400)')
+            ->and($exception->getMessage())->not->toContain($sensitive);
+
+        return;
+    }
+
+    throw new RuntimeException('Expected generic Trakt request to fail');
+});
+
+it('does not log Trakt server response bodies', function () {
+    $sensitive = 'trakt_server_response_secret';
+    Log::spy();
+
+    Http::fake([
+        'api.trakt.tv/search/show*' => Http::response($sensitive, 500),
+    ]);
+
+    $thrown = false;
+
+    try {
+        $this->trakt->search('Breaking Bad');
+    } catch (RuntimeException $exception) {
+        $thrown = true;
+
+        expect($exception->getMessage())->toBe('Trakt API request failed (HTTP 500)')
+            ->and($exception->getMessage())->not->toContain($sensitive);
+    }
+
+    expect($thrown)->toBeTrue();
+
+    Log::shouldHaveReceived('error')
+        ->once()
+        ->withArgs(function (string $message, array $context) use ($sensitive) {
+            return $message === 'Trakt API Server Error'
+                && $context === ['status' => 500, 'endpoint' => 'search']
+                && ! str_contains($message, $sensitive)
+                && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
+        });
+});
+
 it('handles trending with cache', function () {
     // First call: no cache, hits API
     Http::fake([
