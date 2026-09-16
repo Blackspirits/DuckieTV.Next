@@ -20,6 +20,8 @@ class TorrentSettingsContractTest extends TestCase
             ->assertOk()
             ->assertSee('torrenting.enabled', false)
             ->assertSee("setTorrentClient('qBittorrent 4.1+')", false)
+            ->assertSee("setTorrentClient('uTorrent Web UI')", false)
+            ->assertDontSee("setTorrentClient('uTorrent')", false)
             ->assertSee('torrenting.label', false)
             ->assertDontSee('torrenting.progress', false)
             ->assertDontSee('torrenting.autostop', false)
@@ -64,6 +66,38 @@ class TorrentSettingsContractTest extends TestCase
         ])->assertUnprocessable();
 
         $this->assertSame('Transmission', settings()->get('torrenting.client'));
+    }
+
+    public function test_classic_utorrent_is_not_an_active_settings_contract(): void
+    {
+        settings('torrenting.client', 'Transmission');
+
+        $this->postJson(route('settings.update', 'torrent'), [
+            'torrenting.client' => 'uTorrent',
+        ])->assertUnprocessable();
+
+        $this->getJson(route('settings.show', 'utorrent'))->assertUnprocessable();
+
+        $this->assertSame('Transmission', settings()->get('torrenting.client'));
+    }
+
+    public function test_legacy_utorrent_selection_renders_the_effective_fallback_without_mutation(): void
+    {
+        settings('torrenting.client', 'uTorrent');
+        $before = Setting::query()->count();
+
+        $this->get(route('settings.show', 'torrent'))
+            ->assertOk()
+            ->assertSee("setTorrentClient('qBittorrent 4.1+')", false)
+            ->assertDontSee("setTorrentClient('uTorrent')", false);
+
+        $this->get(route('settings.index'))
+            ->assertOk()
+            ->assertSee('client-link-qbittorrent41plus', false)
+            ->assertDontSee('client-link-utorrent', false);
+
+        $this->assertSame($before, Setting::query()->count());
+        $this->assertSame('uTorrent', settings()->get('torrenting.client'));
     }
 
     public function test_runtime_less_torrent_settings_cannot_be_mutated_through_torrent_endpoint(): void

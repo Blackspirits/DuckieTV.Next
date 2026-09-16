@@ -4,7 +4,6 @@ namespace Tests\Feature\Services;
 
 use App\Services\TorrentClients\QBittorrentClient;
 use App\Services\TorrentClients\TransmissionClient;
-use App\Services\TorrentClients\UTorrentClient;
 use App\Services\TorrentClientService;
 use App\Services\TorrentSearchEngines\ETagEngine;
 use App\Services\TorrentSearchEngines\FileMoodEngine;
@@ -80,11 +79,11 @@ class TorrentRegistryTest extends TestCase
 
         $this->assertContains('qBittorrent 4.1+', $availableClients);
         $this->assertContains('Transmission', $availableClients);
-        $this->assertContains('uTorrent', $availableClients);
+        $this->assertNotContains('uTorrent', $availableClients);
 
         $this->assertInstanceOf(QBittorrentClient::class, $clientService->getClient('qBittorrent 4.1+'));
         $this->assertInstanceOf(TransmissionClient::class, $clientService->getClient('Transmission'));
-        $this->assertInstanceOf(UTorrentClient::class, $clientService->getClient('uTorrent'));
+        $this->assertNull($clientService->getClient('uTorrent'));
     }
 
     /**
@@ -94,8 +93,8 @@ class TorrentRegistryTest extends TestCase
     {
         $clientService = $this->app->make(TorrentClientService::class);
 
-        // Default should be uTorrent (per SettingsService.php defaults)
-        $this->assertEquals('uTorrent', $clientService->getActiveClient()->getName());
+        // Fresh installs default to a fully configured server-side client contract.
+        $this->assertEquals('qBittorrent 4.1+', $clientService->getActiveClient()->getName());
 
         // Change setting and check again
         $settings = $this->app->make(\App\Services\SettingsService::class);
@@ -103,5 +102,18 @@ class TorrentRegistryTest extends TestCase
 
         // Refresh service to ensure setting is picked up (or if it's not a singleton that caches the client)
         $this->assertEquals('Transmission', $clientService->getActiveClient()->getName());
+    }
+
+    public function test_legacy_utorrent_selection_falls_back_without_mutating_historical_settings(): void
+    {
+        $settings = $this->app->make(\App\Services\SettingsService::class);
+        $settings->set('torrenting.client', 'uTorrent');
+        $settings->set('utorrent.token', 'legacy-pairing-token');
+
+        $clientService = $this->app->make(TorrentClientService::class);
+
+        $this->assertEquals('qBittorrent 4.1+', $clientService->getActiveClient()->getName());
+        $this->assertSame('uTorrent', $settings->get('torrenting.client'));
+        $this->assertSame('legacy-pairing-token', $settings->get('utorrent.token'));
     }
 }

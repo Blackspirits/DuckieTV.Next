@@ -45,7 +45,9 @@
         @if(settings('torrenting.enabled'))
             {{-- Client-Specific Settings Links --}}
             @php
-                $currentClientName = settings('torrenting.client');
+                // Render the client that the runtime actually resolved. This keeps
+                // legacy unsupported selections read-only while showing the safe fallback.
+                $currentClientName = app(\App\Services\TorrentClientService::class)->getActiveClient()?->getName();
             @endphp
             
             @foreach($supportedClients as $clientKey => $clientData)

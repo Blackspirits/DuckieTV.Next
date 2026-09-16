@@ -68,11 +68,14 @@ class TorrentServiceProvider extends ServiceProvider
             FileMoodEngine::class,
         ], 'torrent.search_engines');
 
+        // Preserve the classic uTorrent implementation for future browser-local
+        // discovery/pairing work, but do not advertise it as an active client.
+        $this->app->singleton(UTorrentClient::class);
+
         // Tag torrent client implementations
         $this->app->tag([
             QBittorrentClient::class,
             TransmissionClient::class,
-            UTorrentClient::class,
             BiglyBTClient::class,
             VuzeClient::class,
             Aria2Client::class,
