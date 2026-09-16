@@ -1,7 +1,9 @@
 <?php
 
 use App\Services\TMDBService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 it('builds image URLs from TMDB paths', function () {
     $tmdb = new TMDBService;
@@ -40,6 +42,32 @@ it('returns nulls when TMDB API fails', function () {
 
     expect($images['poster'])->toBeNull()
         ->and($images['fanart'])->toBeNull();
+});
+
+it('does not log TMDB transport exception details', function () {
+    $sensitive = 'tmdb-api-key-secret';
+    Log::spy();
+
+    Http::fake(fn () => throw new ConnectionException(
+        "cURL error for https://api.themoviedb.org/3/tv/1396?api_key={$sensitive}"
+    ));
+
+    $tmdb = new TMDBService;
+    $images = $tmdb->getShowImages(1396);
+
+    expect($images)->toBe(['poster' => null, 'fanart' => null]);
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(function (string $message, array $context) use ($sensitive) {
+            return $message === 'TMDB: Transport failure while fetching show images.'
+                && $context === [
+                    'tmdb_id' => 1396,
+                    'exception' => ConnectionException::class,
+                ]
+                && ! str_contains($message, $sensitive)
+                && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), $sensitive);
+        });
 });
 
 it('handles missing image paths gracefully', function () {
