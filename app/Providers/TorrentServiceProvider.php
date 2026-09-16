@@ -22,6 +22,7 @@ use App\Services\TorrentSearchEngines\ETagEngine;
 use App\Services\TorrentSearchEngines\FileMoodEngine;
 use App\Services\TorrentSearchEngines\IdopeEngine;
 use App\Services\TorrentSearchEngines\IsoHuntEngine;
+use App\Services\TorrentSearchEngines\JackettAdminEngine;
 use App\Services\TorrentSearchEngines\JackettTorznabEngine;
 use App\Services\TorrentSearchEngines\KATEngine;
 use App\Services\TorrentSearchEngines\KnabenEngine;
@@ -105,16 +106,25 @@ class TorrentServiceProvider extends ServiceProvider
                 foreach (
                     Jackett::query()
                         ->where('enabled', 1)
-                        ->where('torznabEnabled', 1)
                         ->orderBy('id')
                         ->get() as $jackett
                 ) {
                     try {
-                        $engines[] = new JackettTorznabEngine($jackett);
+                        $protocol = (int) $jackett->torznabEnabled;
+                        $engines[] = match ($protocol) {
+                            1 => new JackettTorznabEngine($jackett),
+                            0 => new JackettAdminEngine($jackett),
+                            default => throw new InvalidArgumentException('Invalid Jackett protocol state.'),
+                        };
                     } catch (InvalidArgumentException) {
-                        Log::warning('Skipping invalid enabled Jackett Torznab engine.', [
+                        Log::warning('Skipping invalid enabled Jackett search engine.', [
                             'jackett_id' => $jackett->id,
                             'name' => $jackett->name,
+                            'protocol' => match ((int) $jackett->torznabEnabled) {
+                                1 => 'torznab',
+                                0 => 'admin',
+                                default => 'unknown',
+                            },
                         ]);
                     }
                 }
