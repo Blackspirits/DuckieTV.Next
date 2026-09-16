@@ -335,10 +335,10 @@ class SettingsController extends Controller
                         $this->autoDownloadLifecycle->recordClientConnectivity($client->getId(), false);
                         $res['connection_error'] = "Failed to connect to {$client->getName()} for unknown reasons. Check your settings and server status.";
                     }
-                } catch (\Exception $e) {
+                } catch (\Exception) {
                     $this->autoDownloadLifecycle->recordClientConnectivity($client->getId(), false);
                     $res['connection_success'] = false;
-                    $res['connection_error'] = "Connection to {$client->getName()} failed: ".$e->getMessage();
+                    $res['connection_error'] = "Connection to {$client->getName()} failed. Check your settings and server status.";
                 }
             }
         }

@@ -8,6 +8,7 @@ use App\Services\TorrentClientService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class TorrentConnectionSurfaceTest extends TestCase
@@ -60,11 +61,80 @@ class TorrentConnectionSurfaceTest extends TestCase
             ]);
     }
 
-    public function test_torrent_settings_test_records_disconnected_state_when_connect_throws(): void
+    public function test_status_does_not_expose_connection_exception_details(): void
+    {
+        $client = Mockery::mock(TorrentClientInterface::class);
+        $client->shouldReceive('connect')
+            ->once()
+            ->andThrow(new \RuntimeException('remote-response-secret'));
+        $client->shouldReceive('getName')->twice()->andReturn('MockClient');
+        $client->shouldReceive('getId')->once()->andReturn('mock-client');
+
+        $service = Mockery::mock(TorrentClientService::class);
+        $service->shouldReceive('getActiveClient')->twice()->andReturn($client);
+        $this->app->instance(TorrentClientService::class, $service);
+
+        $lifecycle = Mockery::mock(AutoDownloadLifecycleService::class);
+        $lifecycle->shouldReceive('recordClientConnectivity')
+            ->once()
+            ->with('mock-client', false)
+            ->andReturn(false);
+        $this->app->instance(AutoDownloadLifecycleService::class, $lifecycle);
+
+        $response = $this->getJson(route('torrents.status'));
+
+        $response->assertOk()->assertJson([
+            'connected' => false,
+            'client' => 'MockClient',
+            'active_count' => 0,
+            'torrents' => [],
+            'error' => 'Connection to MockClient failed. Check your settings and ensure the client is running.',
+        ]);
+        $this->assertStringNotContainsString('remote-response-secret', $response->getContent());
+    }
+
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function torrentClientActionFailureProvider(): array
+    {
+        return [
+            'start' => ['torrents.start', 'startTorrent', 'Failed to start torrent'],
+            'stop' => ['torrents.stop', 'stopTorrent', 'Failed to stop torrent'],
+            'pause' => ['torrents.pause', 'pauseTorrent', 'Failed to pause torrent'],
+            'remove' => ['torrents.remove', 'removeTorrent', 'Failed to remove torrent'],
+        ];
+    }
+
+    #[DataProvider('torrentClientActionFailureProvider')]
+    public function test_torrent_client_actions_do_not_expose_exception_details(
+        string $routeName,
+        string $method,
+        string $expectedError
+    ): void {
+        $client = Mockery::mock(TorrentClientInterface::class);
+        $client->shouldReceive('connect')->once()->andReturnTrue();
+        $client->shouldReceive($method)
+            ->once()
+            ->andThrow(new \RuntimeException('remote-response-secret'));
+
+        $service = Mockery::mock(TorrentClientService::class);
+        $service->shouldReceive('getActiveClient')->once()->andReturn($client);
+        $this->app->instance(TorrentClientService::class, $service);
+
+        $response = $this->postJson(route($routeName, ['infoHash' => '0123456789abcdef0123456789abcdef01234567']));
+
+        $response->assertStatus(500)->assertJson(['error' => $expectedError]);
+        $this->assertStringNotContainsString('remote-response-secret', $response->getContent());
+    }
+
+    public function test_torrent_settings_test_does_not_expose_connection_exception_details(): void
     {
         $client = Mockery::mock(TorrentClientInterface::class);
         $client->shouldReceive('readConfig')->once();
-        $client->shouldReceive('connect')->once()->andThrow(new \RuntimeException('offline'));
+        $client->shouldReceive('connect')
+            ->once()
+            ->andThrow(new \RuntimeException('remote-response-secret'));
         $client->shouldReceive('getId')->once()->andReturn('mock-client');
         $client->shouldReceive('getName')->once()->andReturn('MockClient');
 
@@ -81,13 +151,16 @@ class TorrentConnectionSurfaceTest extends TestCase
         $lifecycle->shouldNotReceive('dispatchIfEligible');
         $this->app->instance(AutoDownloadLifecycleService::class, $lifecycle);
 
-        $this->postJson(route('settings.update', 'torrent'), [
+        $response = $this->postJson(route('settings.update', 'torrent'), [
             'test' => 1,
-        ])->assertOk()->assertJson([
+        ]);
+
+        $response->assertOk()->assertJson([
             'success' => true,
             'connection_success' => false,
-            'connection_error' => 'Connection to MockClient failed: offline',
+            'connection_error' => 'Connection to MockClient failed. Check your settings and server status.',
         ]);
+        $this->assertStringNotContainsString('remote-response-secret', $response->getContent());
     }
 
     public function test_torrent_settings_test_uses_the_registered_client_connection_path(): void

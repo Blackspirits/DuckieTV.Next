@@ -262,8 +262,8 @@ class TorrentController extends Controller
                 'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
             ]);
 
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Torrent client request failed'], 500);
         }
 
     }
@@ -306,9 +306,9 @@ class TorrentController extends Controller
                 } else {
                     $error = 'Could not connect to '.$client->getName().'. Check your settings and ensure the client is running.';
                 }
-            } catch (Exception $e) {
+            } catch (Exception) {
                 $connected = false;
-                $error = 'Connection failed: '.$e->getMessage();
+                $error = 'Connection to '.$client->getName().' failed. Check your settings and ensure the client is running.';
             }
 
             return response()->json([
@@ -319,10 +319,10 @@ class TorrentController extends Controller
                 'error' => $error,
             ]);
 
-        } catch (Exception $e) {
+        } catch (Exception) {
             return response()->json([
                 'connected' => false,
-                'error' => $e->getMessage(),
+                'error' => 'Torrent client status unavailable',
                 'client' => 'Unknown',
             ]);
         }
@@ -418,8 +418,8 @@ class TorrentController extends Controller
             $success = $client->startTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to start torrent'], 500);
         }
     }
 
@@ -440,8 +440,8 @@ class TorrentController extends Controller
             $success = $client->stopTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to stop torrent'], 500);
         }
     }
 
@@ -462,8 +462,8 @@ class TorrentController extends Controller
             $success = $client->pauseTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to pause torrent'], 500);
         }
     }
 
@@ -484,8 +484,8 @@ class TorrentController extends Controller
             $success = $client->removeTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to remove torrent'], 500);
         }
     }
 }
