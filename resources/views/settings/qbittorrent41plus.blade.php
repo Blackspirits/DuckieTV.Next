@@ -19,7 +19,7 @@
         
         <div class="form-group">
             <label>{{ __('COMMON/address/lbl') }}</label>
-            <input type="url" name="qbittorrent32plus.server" class="form-control" value="{{ settings('qbittorrent32plus.server') }}" required>
+            <input type="url" name="qbittorrent32plus.server" class="form-control" value="{{ \App\Rules\ValidTorrentClientServer::displayValue(settings('qbittorrent32plus.server')) }}" required>
         </div>
 
         <div class="form-group">
@@ -34,7 +34,7 @@
 
         <div class="form-group">
             <label>{{ __('COMMON/password/lbl') }}</label>
-            <input type="password" name="qbittorrent32plus.password" class="form-control" value="{{ settings('qbittorrent32plus.password') }}">
+            <input type="password" name="qbittorrent32plus.password" class="form-control" value="" autocomplete="new-password" placeholder="Leave blank to keep the saved password">
         </div>
 
         <button type="submit" class="btn btn-primary">{{ __('COMMON/test-save/btn') }}</button>

@@ -40,7 +40,7 @@
 
         <div class="form-group">
             <label>{{ __('COMMON/address/lbl') }}</label>
-            <input type="url" name="{{ $prefix }}.server" class="form-control" value="{{ settings()->get($prefix.'.server') }}" required>
+            <input type="url" name="{{ $prefix }}.server" class="form-control" value="{{ \App\Rules\ValidTorrentClientServer::displayValue(settings()->get($prefix.'.server')) }}" required>
         </div>
 
         <div class="form-group">
@@ -58,7 +58,7 @@
         @if($hasToken)
             <div class="form-group">
                 <label>Token</label>
-                <input type="password" name="{{ $prefix }}.token" class="form-control" value="{{ settings()->get($prefix.'.token') }}">
+                <input type="password" name="{{ $prefix }}.token" class="form-control" value="" autocomplete="new-password" placeholder="Leave blank to keep the saved token">
             </div>
         @endif
 
@@ -86,7 +86,7 @@
 
                 <div class="form-group">
                     <label>{{ __('COMMON/password/lbl') }}</label>
-                    <input type="password" name="{{ $prefix }}.password" class="form-control" value="{{ settings()->get($prefix.'.password') }}">
+                    <input type="password" name="{{ $prefix }}.password" class="form-control" value="" autocomplete="new-password" placeholder="Leave blank to keep the saved password">
                 </div>
             </div>
         @endif
