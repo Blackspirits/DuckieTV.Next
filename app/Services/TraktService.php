@@ -295,10 +295,13 @@ class TraktService
         }
 
         if ($status >= 500) {
-            Log::error("Trakt API Server Error ({$status}) on endpoint '{$type}'. Response body: ".$response->body());
+            Log::error('Trakt API Server Error', [
+                'status' => $status,
+                'endpoint' => $type,
+            ]);
         }
 
-        throw new \RuntimeException("Trakt API error {$status}: ".$response->body());
+        throw new \RuntimeException("Trakt API request failed (HTTP {$status})");
     }
 
     /**
