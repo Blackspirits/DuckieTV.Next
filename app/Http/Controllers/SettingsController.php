@@ -186,7 +186,6 @@ class SettingsController extends Controller
         // Ensure booleans are included even if missing from request (unchecked checkboxes).
         // A `sometimes` rule explicitly means an absent field is a partial update and
         // must not overwrite a sibling boolean merely because it shares a prefix.
-        $rawData = $request->all();
         foreach ($rules as $key => $rule) {
             $ruleList = is_array($rule) ? $rule : explode('|', $rule);
             if (in_array('sometimes', $ruleList, true) || ! in_array('boolean', $ruleList, true)) {
@@ -195,12 +194,18 @@ class SettingsController extends Controller
 
             if (! \Illuminate\Support\Arr::has($validated, $key)) {
                 $prefix = str_contains($key, '.') ? explode('.', $key)[0] : $key;
-                // Check if there are other fields in the same configuration group present
-                $otherFieldsInGroup = collect($rawData)->keys()
-                    ->filter(fn ($k) => str_starts_with($k, $prefix.'.'))
-                    ->count();
 
-                if ($otherFieldsInGroup > 0) {
+                // Infer an unchecked checkbox only when another *allowed* field
+                // from the same settings group was actually submitted. Unknown
+                // sibling keys must never trigger mutation of a validated boolean.
+                $otherAllowedFieldPresent = collect(array_keys($rules))
+                    ->contains(function (string $candidate) use ($expanded, $key, $prefix): bool {
+                        return $candidate !== $key
+                            && str_starts_with($candidate, $prefix.'.')
+                            && \Illuminate\Support\Arr::has($expanded, $candidate);
+                    });
+
+                if ($otherAllowedFieldPresent) {
                     \Illuminate\Support\Arr::set($validated, $key, false);
                 }
             }
@@ -250,6 +255,17 @@ class SettingsController extends Controller
         $res = ['success' => true, 'message' => 'Settings saved successfully.'];
 
         if ($request->has('test') && $section === 'torrent') {
+            // The client settings UI renders the tested endpoint after a
+            // successful connection. Return only non-secret submitted transport
+            // coordinates; never echo credentials or tokens.
+            foreach ($flattened as $key => $value) {
+                if (str_ends_with($key, '.server') && is_string($value)) {
+                    $res['server'] = $value;
+                } elseif (str_ends_with($key, '.port') && is_numeric($value)) {
+                    $res['port'] = (int) $value;
+                }
+            }
+
             $client = $this->torrentClientService->getActiveClient();
             if ($client) {
                 // Refresh config from settings store before testing
