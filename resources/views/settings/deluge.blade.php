@@ -24,7 +24,7 @@
 
         <div class="form-group">
             <label>{{ __('COMMON/port/lbl') }}</label>
-            <input type="number" name="deluge.port" class="form-control" value="{{ settings('deluge.port') }}" required min="0" max="65535">
+            <input type="number" name="deluge.port" class="form-control" value="{{ settings('deluge.port') }}" required min="1" max="65535">
         </div>
 
         {{-- Deluge typically requires only password for WebUI --}}

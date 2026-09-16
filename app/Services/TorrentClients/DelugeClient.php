@@ -34,7 +34,7 @@ class DelugeClient extends BaseTorrentClient
     {
         return [
             'deluge.server' => 'nullable|url',
-            'deluge.port' => 'nullable|integer',
+            'deluge.port' => 'nullable|integer|min:1|max:65535',
             'deluge.password' => 'nullable|string',
         ];
     }
