@@ -58,7 +58,7 @@
 
                 @if(!$isTorznab)
                     <div class="alert alert-warning">
-                        Historical Jackett Admin API configuration preserved. Management is unavailable until the Admin API runtime is restored.
+                        Historical Jackett Admin API configuration. Search runtime is supported; editing and testing remain read-only in this Torznab settings interface.
                     </div>
                     @if($jackett->torznab)
                         <code>{{ $jackett->torznab }}</code>

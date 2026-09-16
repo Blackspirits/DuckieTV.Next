@@ -36,7 +36,7 @@ class JackettSettingsContractTest extends TestCase
             ->assertSee('Jackett / Torznab')
             ->assertSee('Torznab One')
             ->assertSee('Legacy Admin')
-            ->assertSee('Historical Jackett Admin API configuration preserved.')
+            ->assertSee('Search runtime is supported; editing and testing remain read-only')
             ->assertDontSee('never-render-this-secret')
             ->assertDontSee('legacy-secret')
             ->assertDontSee('embedded-endpoint-secret')
