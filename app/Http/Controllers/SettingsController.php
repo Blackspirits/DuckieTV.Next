@@ -157,6 +157,34 @@ class SettingsController extends Controller
                 $expanded[$key] = $value;
             }
         }
+
+        if ($section === 'torrent') {
+            // Torrent-client passwords/tokens are write-only. Settings pages
+            // deliberately render these fields blank; submitting blank/null
+            // means "keep the currently persisted secret", not "erase it".
+            foreach ([
+                'aria2.token',
+                'biglybt.password',
+                'deluge.password',
+                'ktorrent.password',
+                'qbittorrent32plus.password',
+                'tixati.password',
+                'transmission.password',
+                'ttorrent.password',
+                'utorrentwebui.password',
+                'vuze.password',
+            ] as $secretKey) {
+                if (! \Illuminate\Support\Arr::has($expanded, $secretKey)) {
+                    continue;
+                }
+
+                $submittedSecret = \Illuminate\Support\Arr::get($expanded, $secretKey);
+                if ($submittedSecret === null || $submittedSecret === '') {
+                    \Illuminate\Support\Arr::forget($expanded, $secretKey);
+                }
+            }
+        }
+
         $request->merge($expanded);
 
         // Validate using the specific FormRequest rules but manually
