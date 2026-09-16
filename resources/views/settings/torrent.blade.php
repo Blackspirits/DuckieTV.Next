@@ -1,6 +1,6 @@
 @php
     $torrentEnabled = (bool) settings()->get('torrenting.enabled', true);
-    $currentClient = settings()->get('torrenting.client');
+    $currentClient = app(\App\Services\TorrentClientService::class)->getActiveClient()?->getName();
     $labelEnabled = (bool) settings()->get('torrenting.label', false);
     $labelSupported = (bool) ($supportedClients[$currentClient]['supports_labels'] ?? false);
 @endphp

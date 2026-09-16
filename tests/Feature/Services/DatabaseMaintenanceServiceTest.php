@@ -117,7 +117,7 @@ class DatabaseMaintenanceServiceTest extends TestCase
         $this->assertDatabaseHas('settings', ['key' => 'utorrent.token.cached', 'value' => 'keep-cached-token']);
         $this->assertDatabaseMissing('settings', ['key' => 'torrenting.client']);
 
-        $this->assertSame('uTorrent', $settings->get('torrenting.client'));
+        $this->assertSame('qBittorrent 4.1+', $settings->get('torrenting.client'));
 
         $this->assertDatabaseCount('jobs', 1);
         $this->assertDatabaseHas('job_batches', ['id' => 'keep-batch']);

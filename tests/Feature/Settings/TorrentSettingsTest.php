@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Settings;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -10,17 +9,16 @@ class TorrentSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_can_update_torrent_client_setting()
+    public function test_classic_utorrent_cannot_be_selected_as_an_active_client()
     {
-        // Mock a user or session if needed, but settings might be global/session-based without auth in this app context?
-        // The controller uses SettingsService which uses database.
+        settings('torrenting.client', 'Transmission');
 
         $response = $this->postJson(route('settings.update', 'torrent'), [
             'torrenting.client' => 'uTorrent',
         ]);
 
-        $response->assertStatus(200);
-        $this->assertEquals('uTorrent', settings('torrenting.client'));
+        $response->assertStatus(422);
+        $this->assertEquals('Transmission', settings('torrenting.client'));
     }
 
     public function test_can_update_qbittorrent_client_setting()
