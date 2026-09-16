@@ -256,7 +256,7 @@ class TorrentAddTest extends TestCase
             : $client->shouldReceive('addTorrentByUrl')->with($url, $hash, 'State.Ordering', null, 'DuckieTV');
 
         if ($outcome === 'exception') {
-            $add->andThrow(new \RuntimeException('client add failed'));
+            $add->andThrow(new \RuntimeException('remote-response-secret'));
         } else {
             $add->andReturn($outcome === 'success');
         }
@@ -281,7 +281,8 @@ class TorrentAddTest extends TestCase
         } elseif ($outcome === 'false') {
             $response->assertStatus(422)->assertJson(['error' => 'Failed to add torrent to client']);
         } else {
-            $response->assertStatus(500)->assertJson(['error' => 'client add failed']);
+            $response->assertStatus(500)->assertJson(['error' => 'Torrent client request failed']);
+            $this->assertStringNotContainsString('remote-response-secret', $response->getContent());
         }
 
         $episode->refresh();

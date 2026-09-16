@@ -185,7 +185,7 @@ class TorrentClientPanelTest extends TestCase
         $response->assertStatus(200);
         $response->assertJson([
             'connected' => false,
-            'error' => 'Connection failed: Connection Timeout',
+            'error' => 'Connection to MockClient failed. Check your settings and ensure the client is running.',
         ]);
     }
 }
