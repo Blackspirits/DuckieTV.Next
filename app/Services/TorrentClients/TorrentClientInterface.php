@@ -88,6 +88,11 @@ interface TorrentClientInterface
     public function getName(): string;
 
     /**
+     * Whether this client can apply a label/category when adding torrents.
+     */
+    public function supportsLabels(): bool;
+
+    /**
      * Refresh the client's internal configuration from the settings service.
      */
     public function readConfig(): void;

@@ -65,6 +65,7 @@ class SettingsController extends Controller
                     'name' => $presenter->getName(),
                     'icon' => $presenter->getIcon(),
                     'css_class' => $presenter->getCssClass(),
+                    'supports_labels' => $client->supportsLabels(),
                 ],
             ];
         })->toArray();
