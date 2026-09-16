@@ -43,6 +43,17 @@ class SubtitlesService
         'tha' => 'th', 'tur' => 'tr', 'ukr' => 'ua', 'vie' => 'vn',
     ];
 
+    /**
+     * The legacy OpenSubtitles.org XML-RPC API is retired for third-party applications.
+     *
+     * Keep the historical implementation available as migration reference/data compatibility,
+     * but never advertise it as an active runtime.
+     */
+    public function isRuntimeAvailable(): bool
+    {
+        return false;
+    }
+
     public function getLanguages(): array
     {
         return $this->languages;

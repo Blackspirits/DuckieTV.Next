@@ -108,6 +108,7 @@
             </td>
         </tr>
 
+        @if(app(\App\Services\SubtitlesService::class)->isRuntimeAvailable())
         <tr>
             <td colspan="2">
                 <a href="#" data-sidepanel-expand="{{ route('settings.show', 'subtitles') }}">
@@ -115,6 +116,7 @@
                 </a>
             </td>
         </tr>
+        @endif
         <tr>
             <td colspan="2">
                 <a href="#" data-sidepanel-expand="{{ route('settings.show', 'miscellaneous') }}">

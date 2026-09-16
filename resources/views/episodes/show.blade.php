@@ -132,7 +132,11 @@
     </tr>
     @endif
     
-    @if(settings('torrenting.enabled') && ($episode->hasAired() || $episode->isLeaked()))
+    @if(
+        settings('torrenting.enabled')
+        && app(\App\Services\SubtitlesService::class)->isRuntimeAvailable()
+        && ($episode->hasAired() || $episode->isLeaked())
+    )
     <tr>
       <td colspan="2" class="buttons">
         <a href="javascript:void(0)" onclick="Subtitles.search({{ $episode->id }})">

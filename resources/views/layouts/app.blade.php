@@ -91,9 +91,11 @@
                 <li id="actionbar_search">
                     <a href="{{ route('torrents.search-dialog') }}" title="{{ __('TORRENTDIALOG/search-download-any/tooltip') }}" class="glyphicon glyphicon-download" data-torrent-search-show></a>
                 </li>
+                @if(app(\App\Services\SubtitlesService::class)->isRuntimeAvailable())
                 <li id="actionbar_subtitles">
                     <a href="{{ route('subtitles.index') }}" title="{{ __('COMMON/find-subtitle/lbl') }}" class="glyphicon glyphicon-text-width" data-subtitles-search-show></a>
                 </li>
+                @endif
                 {{-- TorrentClientComposer injects $activeClient and $clientClass --}}
                 <li id="actionbar_torrent">
                     <a href="#" title="{{ $activeClient ? $activeClient->getName() : 'DuckieTorrent' }}" class="glyphicon {{ $clientClass }}"

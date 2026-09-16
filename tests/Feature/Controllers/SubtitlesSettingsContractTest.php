@@ -9,52 +9,24 @@ class SubtitlesSettingsContractTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_subtitle_settings_render_uses_opensubtitles_codes_without_writing(): void
+    public function test_retired_subtitle_settings_surface_is_unavailable_without_mutating_saved_preferences(): void
     {
         settings('subtitles.languages', ['por']);
-        $before = \App\Models\Setting::query()->count();
 
         $this->get(route('settings.show', 'subtitles'))
-            ->assertOk()
-            ->assertSee("toggleSubtitleLanguage('por')", false)
-            ->assertSee('data-subtitle-code="eng"', false)
-            ->assertSee('flag-pt', false)
-            ->assertDontSee('not implemented');
+            ->assertNotFound();
 
-        $this->assertSame($before, \App\Models\Setting::query()->count());
+        $this->postJson(route('settings.update', 'subtitles'), [
+            'subtitles.languages' => ['eng'],
+        ])->assertNotFound();
+
         $this->assertSame(['por'], settings()->get('subtitles.languages'));
     }
 
-    public function test_subtitle_settings_accept_multiple_supported_language_codes(): void
+    public function test_settings_sidebar_does_not_advertise_retired_subtitle_integration(): void
     {
-        $this->postJson(route('settings.update', 'subtitles'), [
-            'subtitles.languages' => ['por', 'eng'],
-        ])
+        $this->get(route('settings.index'))
             ->assertOk()
-            ->assertJson(['success' => true]);
-
-        $this->assertSame(['por', 'eng'], settings()->get('subtitles.languages'));
-    }
-
-    public function test_subtitle_settings_clear_selection_persists_empty_array(): void
-    {
-        settings('subtitles.languages', ['eng']);
-
-        $this->postJson(route('settings.update', 'subtitles'), [
-            'subtitles.languages' => [],
-        ])
-            ->assertOk()
-            ->assertJson(['success' => true]);
-
-        $this->assertSame([], settings()->get('subtitles.languages'));
-    }
-
-    public function test_subtitle_settings_reject_ui_locale_codes_without_writing(): void
-    {
-        $this->postJson(route('settings.update', 'subtitles'), [
-            'subtitles.languages' => ['pt_PT'],
-        ])->assertUnprocessable();
-
-        $this->assertDatabaseCount('settings', 0);
+            ->assertDontSee(route('settings.show', 'subtitles'), false);
     }
 }

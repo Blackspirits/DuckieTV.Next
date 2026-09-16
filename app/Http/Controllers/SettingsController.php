@@ -85,6 +85,10 @@ class SettingsController extends Controller
     {
         // Validation is handled by ShowSettingsRequest
 
+        if ($section === 'subtitles' && ! $this->subtitlesService->isRuntimeAvailable()) {
+            abort(404);
+        }
+
         $data = [];
         if ($section === 'language') {
             $data['locales'] = $this->translationService->getAvailableLocales();
@@ -140,6 +144,10 @@ class SettingsController extends Controller
         ];
 
         if (! array_key_exists($section, $allowed)) {
+            abort(404);
+        }
+
+        if ($section === 'subtitles' && ! $this->subtitlesService->isRuntimeAvailable()) {
             abort(404);
         }
 
