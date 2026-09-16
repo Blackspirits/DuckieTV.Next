@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Log;
  * - Caches result in settings table as 'trakttv.trending.cache'
  *
  * Scheduling (ported from TraktTVUpdateService.js run block, lines 88-125):
- * - Update check: every 'trakt-update.period' hours (default: 1)
+ * - Update check: every 'trakt-update.period' hours (default: 12)
  * - Trending cache: once per day
  * - Timestamps stored in settings: 'trakttv.lastupdated', 'trakttv.lastupdated.trending'
  *
@@ -92,7 +92,7 @@ class TraktUpdateJob implements ShouldQueue
     private function checkForShowUpdates(TraktService $trakt, FavoritesService $favorites, SettingsService $settings): void
     {
         $nowMs = now()->getTimestampMs();
-        $period = (int) $settings->get('trakt-update.period', 1); // hours
+        $period = (int) $settings->get('trakt-update.period', 12); // hours
         $lastUpdated = (int) $settings->get('trakttv.lastupdated', 0);
 
         // Match the historical Angular startup contract. On the first run it

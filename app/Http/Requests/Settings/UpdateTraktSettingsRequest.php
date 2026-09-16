@@ -14,11 +14,7 @@ class UpdateTraktSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'trakttv.sync' => 'boolean',
-            'trakttv.sync-downloaded' => 'boolean',
-            'trakt-update.period' => 'integer|min:1|max:24',
-            'trakttv.username' => 'nullable|string',
-            'trakttv.passwordHash' => 'nullable|string', // Or token if we switch to OAuth
+            'trakt-update.period' => 'sometimes|integer|min:1|max:24',
         ];
     }
 }
