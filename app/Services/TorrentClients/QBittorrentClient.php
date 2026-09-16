@@ -28,6 +28,9 @@ class QBittorrentClient extends BaseTorrentClient
     /** @var array<int, array<string, mixed>>|null */
     protected ?array $torrentSnapshot = null;
 
+    /** qBittorrent application major version, resolved lazily for action endpoints. */
+    protected ?int $applicationMajorVersion = null;
+
     public function __construct(SettingsService $settings)
     {
         parent::__construct($settings);
@@ -41,6 +44,7 @@ class QBittorrentClient extends BaseTorrentClient
         $this->connected = false;
         $this->cookie = null;
         $this->torrentSnapshot = null;
+        $this->applicationMajorVersion = null;
     }
 
     #[\Override]
@@ -53,8 +57,7 @@ class QBittorrentClient extends BaseTorrentClient
     {
         return [
             'qbittorrent32plus.server' => 'nullable|url',
-            'qbittorrent32plus.port' => 'nullable|integer',
-            'qbittorrent32plus.use_auth' => 'boolean',
+            'qbittorrent32plus.port' => 'nullable|integer|min:1|max:65535',
             'qbittorrent32plus.username' => 'nullable|string',
             'qbittorrent32plus.password' => 'nullable|string',
         ];
@@ -70,7 +73,6 @@ class QBittorrentClient extends BaseTorrentClient
             'port' => 'qbittorrent32plus.port',
             'username' => 'qbittorrent32plus.username',
             'password' => 'qbittorrent32plus.password',
-            'use_auth' => 'qbittorrent32plus.use_auth',
         ];
     }
 
@@ -142,7 +144,7 @@ class QBittorrentClient extends BaseTorrentClient
             'password' => $this->config['password'],
         ]);
 
-        if ($response->successful() && $response->body() === 'Ok.') {
+        if ($response->successful() && ($response->status() === 204 || trim($response->body()) === 'Ok.')) {
             $this->cookie = $response->header('Set-Cookie');
             $this->connected = true;
 
@@ -257,7 +259,7 @@ class QBittorrentClient extends BaseTorrentClient
         /** @var \Illuminate\Http\Client\Response $response */
         $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
-            ->post($this->getUrl('torrents/resume'), ['hashes' => $infoHash]);
+            ->post($this->getUrl('torrents/'.$this->torrentActionMethod('resume', 'start')), ['hashes' => $infoHash]);
 
         return $response->successful();
     }
@@ -281,9 +283,36 @@ class QBittorrentClient extends BaseTorrentClient
         /** @var \Illuminate\Http\Client\Response $response */
         $response = $this->webApiRequest()->withHeaders(['Cookie' => $this->cookie])
             ->asForm()
-            ->post($this->getUrl('torrents/pause'), ['hashes' => $infoHash]);
+            ->post($this->getUrl('torrents/'.$this->torrentActionMethod('pause', 'stop')), ['hashes' => $infoHash]);
 
         return $response->successful();
+    }
+
+    /**
+     * qBittorrent 5.0 renamed the torrent control endpoints from
+     * resume/pause to start/stop. Resolve the application major version
+     * lazily so listing and adding torrents do not depend on this probe.
+     */
+    protected function torrentActionMethod(string $legacyMethod, string $modernMethod): string
+    {
+        if ($this->applicationMajorVersion === null) {
+            $response = $this->webApiRequest()
+                ->withHeaders(['Cookie' => $this->cookie])
+                ->get($this->getUrl('app/version'));
+
+            if (! $response->successful()) {
+                throw new Exception("qBittorrent version probe returned HTTP {$response->status()}: ".$response->body());
+            }
+
+            $version = trim($response->body());
+            if (! preg_match('/^v?(\\d+)(?:\\.|$)/i', $version, $matches)) {
+                throw new Exception('qBittorrent returned an invalid application version.');
+            }
+
+            $this->applicationMajorVersion = (int) $matches[1];
+        }
+
+        return $this->applicationMajorVersion >= 5 ? $modernMethod : $legacyMethod;
     }
 
     /**

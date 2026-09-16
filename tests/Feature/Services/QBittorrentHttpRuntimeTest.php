@@ -151,7 +151,6 @@ class QBittorrentHttpRuntimeTest extends TestCase
         $values = [
             'qbittorrent32plus.server' => 'http://127.0.0.1',
             'qbittorrent32plus.port' => $port,
-            'qbittorrent32plus.use_auth' => true,
             'qbittorrent32plus.username' => 'duckie',
             'qbittorrent32plus.password' => 'secret',
         ];
