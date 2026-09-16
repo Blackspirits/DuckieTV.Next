@@ -35,12 +35,12 @@ class SettingsRenderReadOnlyTest extends TestCase
         $this->assertSame('pt_pt', settings()->get('application.locale'));
     }
 
-    public function test_subtitle_settings_render_preserves_selected_languages(): void
+    public function test_retired_subtitle_settings_route_preserves_selected_languages(): void
     {
         settings('subtitles.languages', ['por']);
         $before = $this->settingsRowCount();
 
-        $this->get(route('settings.show', 'subtitles'))->assertOk();
+        $this->get(route('settings.show', 'subtitles'))->assertNotFound();
 
         $this->assertSame($before, $this->settingsRowCount());
         $this->assertSame(['por'], settings()->get('subtitles.languages'));

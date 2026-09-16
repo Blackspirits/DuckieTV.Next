@@ -15,11 +15,20 @@ class SubtitlesController extends Controller
         $this->subtitlesService = $subtitlesService;
     }
 
+    private function ensureRuntimeAvailable(): void
+    {
+        if (! $this->subtitlesService->isRuntimeAvailable()) {
+            abort(410, 'Subtitle search requires migration to the current OpenSubtitles API.');
+        }
+    }
+
     /**
      * Return the subtitles search overlay shell.
      */
     public function index()
     {
+        $this->ensureRuntimeAvailable();
+
         return view('subtitles.index');
     }
 
@@ -28,6 +37,8 @@ class SubtitlesController extends Controller
      */
     public function search(Request $request)
     {
+        $this->ensureRuntimeAvailable();
+
         $request->validate([
             'episode_id' => 'required|exists:episodes,id',
             'languages' => 'sometimes|array',
@@ -58,6 +69,8 @@ class SubtitlesController extends Controller
      */
     public function searchByQuery(Request $request)
     {
+        $this->ensureRuntimeAvailable();
+
         $request->validate([
             'query' => 'required|string|min:3',
             'languages' => 'sometimes|array',
