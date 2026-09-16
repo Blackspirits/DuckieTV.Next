@@ -43,6 +43,12 @@ class QBittorrentClient extends BaseTorrentClient
         $this->torrentSnapshot = null;
     }
 
+    #[\Override]
+    public function supportsLabels(): bool
+    {
+        return true;
+    }
+
     public function getValidationRules(): array
     {
         return [

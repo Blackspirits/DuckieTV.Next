@@ -88,6 +88,15 @@ abstract class BaseTorrentClient implements TorrentClientInterface
     }
 
     /**
+     * Labels are opt-in: the historical base client defaulted to unsupported.
+     */
+    #[\Override]
+    public function supportsLabels(): bool
+    {
+        return false;
+    }
+
+    /**
      * Check if the client is currently connected.
      */
     public function isConnected(): bool
