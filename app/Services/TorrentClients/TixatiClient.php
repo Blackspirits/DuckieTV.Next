@@ -30,7 +30,7 @@ class TixatiClient extends BaseTorrentClient
     {
         return [
             'tixati.server' => 'nullable|url',
-            'tixati.port' => 'nullable|integer',
+            'tixati.port' => 'nullable|integer|min:1|max:65535',
             'tixati.use_auth' => 'boolean',
             'tixati.username' => 'nullable|string',
             'tixati.password' => 'nullable|string',

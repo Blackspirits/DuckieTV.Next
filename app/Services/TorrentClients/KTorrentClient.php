@@ -28,7 +28,7 @@ class KTorrentClient extends BaseTorrentClient
     {
         return [
             'ktorrent.server' => 'nullable|url',
-            'ktorrent.port' => 'nullable|integer',
+            'ktorrent.port' => 'nullable|integer|min:1|max:65535',
             'ktorrent.username' => 'nullable|string',
             'ktorrent.password' => 'nullable|string',
         ];

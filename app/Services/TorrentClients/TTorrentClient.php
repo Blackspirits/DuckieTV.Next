@@ -27,7 +27,7 @@ class TTorrentClient extends BaseTorrentClient
     {
         return [
             'ttorrent.server' => 'nullable|url',
-            'ttorrent.port' => 'nullable|integer',
+            'ttorrent.port' => 'nullable|integer|min:1|max:65535',
             'ttorrent.use_auth' => 'boolean',
             'ttorrent.username' => 'nullable|string',
             'ttorrent.password' => 'nullable|string',
