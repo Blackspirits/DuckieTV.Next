@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\KtorrentData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 use Symfony\Component\DomCrawler\Crawler;
@@ -27,7 +28,7 @@ class KTorrentClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'ktorrent.server' => 'nullable|url',
+            'ktorrent.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'ktorrent.port' => 'nullable|integer|min:1|max:65535',
             'ktorrent.username' => 'nullable|string',
             'ktorrent.password' => 'nullable|string',

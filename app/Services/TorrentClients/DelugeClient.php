@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\DelugeData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 
@@ -33,7 +34,7 @@ class DelugeClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'deluge.server' => 'nullable|url',
+            'deluge.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'deluge.port' => 'nullable|integer|min:1|max:65535',
             'deluge.password' => 'nullable|string',
         ];

@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\TransmissionData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 
@@ -27,7 +28,7 @@ class TransmissionClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'transmission.server' => 'nullable|url',
+            'transmission.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'transmission.port' => 'nullable|integer|min:1|max:65535',
             'transmission.path' => 'nullable|string',
             'transmission.use_auth' => 'boolean',

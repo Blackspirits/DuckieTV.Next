@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\TixatiData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 use Symfony\Component\DomCrawler\Crawler;
@@ -29,7 +30,7 @@ class TixatiClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'tixati.server' => 'nullable|url',
+            'tixati.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'tixati.port' => 'nullable|integer|min:1|max:65535',
             'tixati.use_auth' => 'boolean',
             'tixati.username' => 'nullable|string',
