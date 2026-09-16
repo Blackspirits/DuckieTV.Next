@@ -73,6 +73,17 @@ class SettingsControllerTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_explicit_missing_sentinel_is_validated_for_partial_nested_settings(): void
+    {
+        settings('torrenting.enabled', true);
+
+        $this->postJson(route('settings.update', 'torrent'), [
+            'torrenting.enabled' => '__missing__',
+        ])->assertUnprocessable();
+
+        $this->assertTrue((bool) settings()->get('torrenting.enabled'));
+    }
+
     public function test_auto_backup_status_initializes_historical_last_run(): void
     {
         settings('autobackup.period', 'daily');
