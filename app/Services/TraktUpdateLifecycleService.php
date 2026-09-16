@@ -83,7 +83,7 @@ class TraktUpdateLifecycleService
     private function isDue(): bool
     {
         $nowMs = now()->getTimestampMs();
-        $periodHours = max(1, min(24, (int) $this->settings->get('trakt-update.period', 1)));
+        $periodHours = max(1, min(24, (int) $this->settings->get('trakt-update.period', 12)));
         $lastUpdated = (int) $this->settings->get('trakttv.lastupdated', 0);
         $lastTrendingUpdate = (int) $this->settings->get('trakttv.lastupdated.trending', 0);
 

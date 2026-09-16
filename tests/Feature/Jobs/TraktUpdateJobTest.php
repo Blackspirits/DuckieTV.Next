@@ -45,6 +45,7 @@ it('releases on series rate limit without marking the update complete', function
     Cache::forget('trakt_blocked_until');
 
     $settings = app(SettingsService::class);
+    $settings->set('trakt-update.period', 1);
     $previousShowUpdate = now()->subHours(2)->getTimestampMs();
     $settings->set('trakttv.lastupdated', $previousShowUpdate);
     $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
@@ -157,6 +158,7 @@ it('skips update when recently run', function () {
 
 it('updates a favorite show when trakt has newer data', function () {
     $settings = app(SettingsService::class);
+    $settings->set('trakt-update.period', 1);
     // Set last update to a long time ago
     $settings->set('trakttv.lastupdated', now()->subHours(2)->getTimestampMs());
     // Set trending update to now (skip trending check)
@@ -219,6 +221,7 @@ it('updates a favorite show when trakt has newer data', function () {
 
 it('skips shows that havent been updated on trakt', function () {
     $settings = app(SettingsService::class);
+    $settings->set('trakt-update.period', 1);
     $settings->set('trakttv.lastupdated', now()->subHours(2)->getTimestampMs());
     $settings->set('trakttv.lastupdated.trending', now()->getTimestampMs());
 

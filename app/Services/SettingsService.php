@@ -209,7 +209,7 @@ class SettingsService
         'torrenting.streaming' => false,
 
         // ─── Trakt ─────────────────────────────────────────────
-        'trakt-update.period' => 1,
+        'trakt-update.period' => 12,
         'trakttv.passwordHash' => null,
         'trakttv.sync' => false,
         'trakttv.sync-downloaded' => true,
