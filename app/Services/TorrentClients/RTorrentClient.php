@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\RTorrentData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 
@@ -27,7 +28,7 @@ class RTorrentClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'rtorrent.server' => 'nullable|url',
+            'rtorrent.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'rtorrent.port' => 'nullable|integer|min:1|max:65535',
             'rtorrent.path' => 'nullable|string',
         ];

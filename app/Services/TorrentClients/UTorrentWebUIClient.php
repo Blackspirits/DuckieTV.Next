@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\UTorrentWebUIData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 use Symfony\Component\DomCrawler\Crawler;
@@ -33,7 +34,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'utorrentwebui.server' => 'nullable|url',
+            'utorrentwebui.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'utorrentwebui.port' => 'nullable|integer|min:1|max:65535',
             'utorrentwebui.use_auth' => 'boolean',
             'utorrentwebui.username' => 'nullable|string',

@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\Aria2Data;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 
@@ -26,7 +27,7 @@ class Aria2Client extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'aria2.server' => 'nullable|url',
+            'aria2.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'aria2.port' => 'nullable|integer|min:1|max:65535',
             'aria2.token' => 'nullable|string',
         ];

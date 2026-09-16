@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\QBittorrentData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -56,7 +57,7 @@ class QBittorrentClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'qbittorrent32plus.server' => 'nullable|url',
+            'qbittorrent32plus.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'qbittorrent32plus.port' => 'nullable|integer|min:1|max:65535',
             'qbittorrent32plus.username' => 'nullable|string',
             'qbittorrent32plus.password' => 'nullable|string',

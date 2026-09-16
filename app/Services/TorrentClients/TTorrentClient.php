@@ -3,6 +3,7 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\TTorrentData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
 use Symfony\Component\DomCrawler\Crawler;
@@ -26,7 +27,7 @@ class TTorrentClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'ttorrent.server' => 'nullable|url',
+            'ttorrent.server' => ['nullable', 'string', new ValidTorrentClientServer],
             'ttorrent.port' => 'nullable|integer|min:1|max:65535',
             'ttorrent.use_auth' => 'boolean',
             'ttorrent.username' => 'nullable|string',
