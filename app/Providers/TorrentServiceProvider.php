@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Jackett;
 use App\Services\SettingsService;
 use App\Services\TorrentClients\Aria2Client;
 use App\Services\TorrentClients\BiglyBTClient;
@@ -21,6 +22,7 @@ use App\Services\TorrentSearchEngines\ETagEngine;
 use App\Services\TorrentSearchEngines\FileMoodEngine;
 use App\Services\TorrentSearchEngines\IdopeEngine;
 use App\Services\TorrentSearchEngines\IsoHuntEngine;
+use App\Services\TorrentSearchEngines\JackettTorznabEngine;
 use App\Services\TorrentSearchEngines\KATEngine;
 use App\Services\TorrentSearchEngines\KnabenEngine;
 use App\Services\TorrentSearchEngines\LimeTorrentsEngine;
@@ -33,7 +35,10 @@ use App\Services\TorrentSearchEngines\TheRARBGEngine;
 use App\Services\TorrentSearchEngines\TorrentDownloadsEngine;
 use App\Services\TorrentSearchEngines\UindexEngine;
 use App\Services\TorrentSearchService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 
 /**
  * Service Provider for Torrent-related services.
@@ -88,7 +93,34 @@ class TorrentServiceProvider extends ServiceProvider
         ], 'torrent.clients');
 
         $this->app->singleton(TorrentSearchService::class, function ($app) {
-            return new TorrentSearchService($app->make(SettingsService::class), $app->tagged('torrent.search_engines'));
+            $engines = [];
+            foreach ($app->tagged('torrent.search_engines') as $engine) {
+                $engines[] = $engine;
+            }
+
+            // Historical DuckieTV loaded enabled Jackett engines after the
+            // native registry, so an enabled Jackett row with the same name
+            // deliberately overrides the built-in engine for that name.
+            if (Schema::hasTable('jackett')) {
+                foreach (
+                    Jackett::query()
+                        ->where('enabled', 1)
+                        ->where('torznabEnabled', 1)
+                        ->orderBy('id')
+                        ->get() as $jackett
+                ) {
+                    try {
+                        $engines[] = new JackettTorznabEngine($jackett);
+                    } catch (InvalidArgumentException) {
+                        Log::warning('Skipping invalid enabled Jackett Torznab engine.', [
+                            'jackett_id' => $jackett->id,
+                            'name' => $jackett->name,
+                        ]);
+                    }
+                }
+            }
+
+            return new TorrentSearchService($app->make(SettingsService::class), $engines);
         });
 
         $this->app->singleton(TorrentClientService::class, function ($app) {
