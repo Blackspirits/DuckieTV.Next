@@ -28,12 +28,11 @@ class TransmissionClient extends BaseTorrentClient
     {
         return [
             'transmission.server' => 'nullable|url',
-            'transmission.port' => 'nullable|integer',
+            'transmission.port' => 'nullable|integer|min:1|max:65535',
             'transmission.path' => 'nullable|string',
             'transmission.use_auth' => 'boolean',
             'transmission.username' => 'nullable|string',
             'transmission.password' => 'nullable|string',
-            'transmission.progressX100' => 'boolean',
         ];
     }
 
