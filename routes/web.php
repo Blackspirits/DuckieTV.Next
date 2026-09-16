@@ -74,6 +74,12 @@ Route::prefix('settings')->group(function () {
     Route::post('/restore', [\App\Http\Controllers\SettingsController::class, 'restore'])->name('settings.restore');
     Route::get('/restore/progress', [\App\Http\Controllers\SettingsController::class, 'restoreProgress'])->name('settings.restore-progress');
     Route::post('/restore/cancel', [\App\Http\Controllers\SettingsController::class, 'cancelRestore'])->name('settings.restore-cancel');
+    Route::post('/jackett-search/indexers', [\App\Http\Controllers\SettingsController::class, 'storeJackettIndexer'])
+        ->name('settings.jackett.store');
+    Route::patch('/jackett-search/indexers/{jackett}', [\App\Http\Controllers\SettingsController::class, 'updateJackettIndexer'])
+        ->name('settings.jackett.update');
+    Route::delete('/jackett-search/indexers/{jackett}', [\App\Http\Controllers\SettingsController::class, 'destroyJackettIndexer'])
+        ->name('settings.jackett.destroy');
     Route::get('/{section}', [\App\Http\Controllers\SettingsController::class, 'show'])->name('settings.show');
     Route::post('/{section}', [\App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
 });

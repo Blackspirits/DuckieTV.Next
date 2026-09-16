@@ -3,6 +3,7 @@
 namespace App\Services\TorrentSearchEngines;
 
 use App\Models\Jackett;
+use App\Support\JackettTorznabEndpoint;
 use App\Support\MagnetUri;
 use App\Support\TorrentSize;
 use DOMDocument;
@@ -12,7 +13,6 @@ use DOMXPath;
 use Exception;
 use GuzzleHttp\Psr7\Uri;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 
 final class JackettTorznabEngine implements SearchEngineInterface
 {
@@ -32,33 +32,39 @@ final class JackettTorznabEngine implements SearchEngineInterface
         $apiKey = trim((string) $jackett->apiKey);
 
         if ($name === '') {
-            throw new InvalidArgumentException('Jackett search engine requires a name.');
+            throw new \InvalidArgumentException('Jackett search engine requires a name.');
         }
 
         if ($apiKey === '') {
-            throw new InvalidArgumentException('Jackett search engine requires an API key.');
+            throw new \InvalidArgumentException('Jackett search engine requires an API key.');
         }
 
         $this->name = $name;
         $this->apiKey = $apiKey;
-        $this->endpoint = $this->normalizeEndpoint((string) $jackett->torznab);
+        $this->endpoint = JackettTorznabEndpoint::searchUrl((string) $jackett->torznab);
     }
 
     #[\Override]
     public function search(string $query, ?string $sortBy = null): array
     {
-        $response = Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
-            ->timeout(self::REQUEST_TIMEOUT_SECONDS)
-            ->withoutRedirecting()
-            ->withHeaders([
-                'Accept' => 'application/rss+xml, application/xml, text/xml',
-            ])
-            ->get($this->endpoint, [
-                't' => 'search',
-                'cat' => '',
-                'apikey' => $this->apiKey,
-                'q' => trim($query),
-            ]);
+        try {
+            $response = Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+                ->timeout(self::REQUEST_TIMEOUT_SECONDS)
+                ->withoutRedirecting()
+                ->withHeaders([
+                    'Accept' => 'application/rss+xml, application/xml, text/xml',
+                ])
+                ->get($this->endpoint, [
+                    't' => 'search',
+                    'cat' => '',
+                    'apikey' => $this->apiKey,
+                    'q' => trim($query),
+                ]);
+        } catch (\Throwable) {
+            // HTTP client exceptions can contain the full request URI, including
+            // the Torznab API key. Replace them with a stable safe message.
+            throw new Exception("Jackett Torznab search failed for {$this->name}.");
+        }
 
         if (! $response->successful()) {
             throw new Exception("Jackett Torznab search failed for {$this->name} (Status: {$response->status()}).");
@@ -99,46 +105,6 @@ final class JackettTorznabEngine implements SearchEngineInterface
     public function getName(): string
     {
         return $this->name;
-    }
-
-    private function normalizeEndpoint(string $endpoint): string
-    {
-        $endpoint = trim($endpoint);
-
-        if ($endpoint === '' || preg_match('/[\x00-\x1F\x7F]/', $endpoint) === 1) {
-            throw new InvalidArgumentException('Invalid Jackett Torznab endpoint.');
-        }
-
-        try {
-            $uri = new Uri($endpoint);
-        } catch (\Throwable) {
-            throw new InvalidArgumentException('Invalid Jackett Torznab endpoint.');
-        }
-
-        $scheme = strtolower($uri->getScheme());
-        if (! in_array($scheme, ['http', 'https'], true)
-            || $uri->getHost() === ''
-            || $uri->getUserInfo() !== '') {
-            throw new InvalidArgumentException('Invalid Jackett Torznab endpoint.');
-        }
-
-        $path = rtrim($uri->getPath(), '/');
-        if ($path === '') {
-            throw new InvalidArgumentException('Invalid Jackett Torznab endpoint.');
-        }
-
-        // Legacy Jackett v1 stored the tracker Torznab root and expected /api
-        // to be appended. Modern Jackett/Prowlarr URLs already include an API
-        // path, commonly /api/v2.0/.../results/torznab/ or .../torznab/api.
-        if (! str_contains(strtolower($path), '/api/v')
-            && ! str_ends_with(strtolower($path), '/api')) {
-            $path .= '/api';
-        }
-
-        return (string) $uri
-            ->withPath($path)
-            ->withQuery('')
-            ->withFragment('');
     }
 
     /**

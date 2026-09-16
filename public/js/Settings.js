@@ -390,3 +390,102 @@ window.setSearchProvider = function (provider) {
 window.setSearchQuality = function (quality) {
     return window.saveTorrentSearchSetting('torrenting.searchquality', quality);
 };
+
+
+window.JackettSettings = {
+    request: function (url, method, payload) {
+        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const options = {
+            method: method,
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        };
+
+        if (payload !== undefined) {
+            options.body = JSON.stringify(payload);
+        }
+
+        return fetch(url, options).then(response => {
+            return response.json().catch(() => ({})).then(data => {
+                if (!response.ok) {
+                    return Promise.reject(data);
+                }
+
+                return data;
+            });
+        });
+    },
+
+    reload: function () {
+        if (window.SidePanel && document.querySelector('[data-section="jackett-search"]')) {
+            return window.SidePanel.expand('/settings/jackett-search');
+        }
+
+        window.location.reload();
+        return undefined;
+    },
+
+    create: function (form) {
+        const payload = {
+            name: form.elements.name.value,
+            torznab: form.elements.torznab.value,
+            apiKey: form.elements.apiKey.value,
+            enabled: form.elements.enabled.checked
+        };
+
+        return this.request('/settings/jackett-search/indexers', 'POST', payload)
+            .then(data => {
+                if (data.success) this.reload();
+                return data;
+            })
+            .catch(error => {
+                console.error('Failed to create Jackett indexer:', error);
+                alert(error.message || 'Failed to create Jackett indexer.');
+            });
+    },
+
+    update: function (id) {
+        const endpoint = document.getElementById(`jackett-torznab-${id}`);
+        const apiKey = document.getElementById(`jackett-api-key-${id}`);
+        const enabled = document.getElementById(`jackett-enabled-${id}`);
+        if (!endpoint || !apiKey || !enabled) return;
+
+        const payload = {
+            torznab: endpoint.value
+        };
+        if (!enabled.disabled) {
+            payload.enabled = enabled.checked;
+        }
+        if (apiKey.value.trim() !== '') {
+            payload.apiKey = apiKey.value;
+        }
+
+        return this.request(`/settings/jackett-search/indexers/${id}`, 'PATCH', payload)
+            .then(data => {
+                if (data.success) this.reload();
+                return data;
+            })
+            .catch(error => {
+                console.error('Failed to update Jackett indexer:', error);
+                alert(error.message || 'Failed to update Jackett indexer.');
+            });
+    },
+
+    remove: function (id) {
+        if (!window.confirm('Delete this Jackett / Torznab indexer?')) return;
+
+        return this.request(`/settings/jackett-search/indexers/${id}`, 'DELETE')
+            .then(data => {
+                if (data.success) this.reload();
+                return data;
+            })
+            .catch(error => {
+                console.error('Failed to delete Jackett indexer:', error);
+                alert(error.message || 'Failed to delete Jackett indexer.');
+            });
+    }
+};
