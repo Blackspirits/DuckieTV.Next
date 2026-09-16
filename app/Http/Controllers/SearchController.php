@@ -103,8 +103,8 @@ class SearchController extends Controller
             $serie = $this->favorites->addFavorite($data);
 
             return redirect()->route('calendar.index')->with('status', "Added {$serie->name} to favorites.");
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to add show: '.$e->getMessage());
+        } catch (\Exception) {
+            return back()->with('error', 'Failed to add show. Please try again.');
         }
     }
 
