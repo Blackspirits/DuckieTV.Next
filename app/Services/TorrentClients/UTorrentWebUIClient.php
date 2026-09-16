@@ -34,7 +34,7 @@ class UTorrentWebUIClient extends BaseTorrentClient
     {
         return [
             'utorrentwebui.server' => 'nullable|url',
-            'utorrentwebui.port' => 'nullable|integer',
+            'utorrentwebui.port' => 'nullable|integer|min:1|max:65535',
             'utorrentwebui.use_auth' => 'boolean',
             'utorrentwebui.username' => 'nullable|string',
             'utorrentwebui.password' => 'nullable|string',

@@ -27,7 +27,7 @@ class Aria2Client extends BaseTorrentClient
     {
         return [
             'aria2.server' => 'nullable|url',
-            'aria2.port' => 'nullable|integer',
+            'aria2.port' => 'nullable|integer|min:1|max:65535',
             'aria2.token' => 'nullable|string',
         ];
     }

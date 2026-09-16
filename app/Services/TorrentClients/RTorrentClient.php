@@ -28,9 +28,8 @@ class RTorrentClient extends BaseTorrentClient
     {
         return [
             'rtorrent.server' => 'nullable|url',
-            'rtorrent.port' => 'nullable|integer',
+            'rtorrent.port' => 'nullable|integer|min:1|max:65535',
             'rtorrent.path' => 'nullable|string',
-            'rtorrent.use_auth' => 'boolean',
         ];
     }
 
