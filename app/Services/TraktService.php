@@ -101,7 +101,7 @@ class TraktService
         }
     }
 
-    // ─── URL Builder ─────────────────────────────────────────────
+    // ─── URL Builder ──────────────────────────────────────────────
 
     /**
      * Build a full API URL from an endpoint type and optional parameters.
@@ -295,10 +295,13 @@ class TraktService
         }
 
         if ($status >= 500) {
-            Log::error("Trakt API Server Error ({$status}) on endpoint '{$type}'. Response body: ".$response->body());
+            Log::error('Trakt API server error.', [
+                'status' => $status,
+                'endpoint' => $type,
+            ]);
         }
 
-        throw new \RuntimeException("Trakt API error {$status}: ".$response->body());
+        throw new \RuntimeException("Trakt API request failed for {$type} (HTTP {$status})");
     }
 
     /**
@@ -321,7 +324,7 @@ class TraktService
      *
      * @param  string  $type  Endpoint key matching a parser method
      * @param  mixed  $data  Raw JSON response data
-     * @return mixed Parsed data
+     * @return mixed Parsed response on successful retry
      */
     private function parse(string $type, mixed $data): mixed
     {
