@@ -28,6 +28,21 @@ it('can create a serie with all fields', function () {
         ->and($serie->autoDownload)->toBeTrue();
 });
 
+it('keeps legacy series timestamps as milliseconds and exposes presentation dates explicitly', function () {
+    $serie = Serie::create([
+        'name' => 'Legacy Time',
+        'trakt_id' => 42,
+        'firstaired' => 1200787200000,
+        'added' => 1700000000000,
+        'lastupdated' => '2024-01-01T00:00:00.000Z',
+    ])->fresh();
+
+    expect($serie->firstaired)->toBe(1200787200000)
+        ->and($serie->added)->toBe(1700000000000)
+        ->and($serie->lastupdated)->toBe('2024-01-01T00:00:00.000Z')
+        ->and($serie->getFirstAiredDate()?->toIso8601String())->toBe('2008-01-20T00:00:00+00:00');
+});
+
 it('strips "The" prefix in getSortName', function () {
     $serie = Serie::create(['name' => 'The Walking Dead', 'trakt_id' => 1]);
     expect($serie->getSortName())->toBe('Walking Dead');
@@ -115,6 +130,54 @@ it('marks all episodes as watched', function () {
     expect($ep1->isWatched())->toBeTrue()
         ->and($ep1->isDownloaded())->toBeTrue()
         ->and($ep2->isWatched())->toBeFalse();
+});
+
+it('counts watched runtime only for aired non-special episodes', function () {
+    $serie = Serie::create([
+        'name' => 'Runtime Contract',
+        'trakt_id' => 450,
+        'runtime' => 60,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 1,
+        'firstaired' => now()->subDays(2)->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4501,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 2,
+        'firstaired' => now()->subDay()->getTimestampMs(),
+        'watched' => 0,
+        'trakt_id' => 4502,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 1,
+        'episodenumber' => 3,
+        'firstaired' => now()->addDay()->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4503,
+    ]);
+
+    Episode::create([
+        'serie_id' => $serie->id,
+        'seasonnumber' => 0,
+        'episodenumber' => 1,
+        'firstaired' => now()->subDay()->getTimestampMs(),
+        'watched' => 1,
+        'trakt_id' => 4504,
+    ]);
+
+    expect($serie->getTotalRunTime())->toBe(120)
+        ->and($serie->getTotalWatchedTime())->toBe(60)
+        ->and($serie->getWatchedPercentage())->toBe(50);
 });
 
 it('gets next and last episode', function () {

@@ -125,6 +125,14 @@ class SidePanel {
         }
     }
 
+    renderError(error) {
+        const message = error?.message ?? String(error);
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger';
+        alert.textContent = `Error: ${message}`;
+        this.panel.replaceChildren(alert);
+    }
+
     async show(url, options = {}) {
         if (url.includes('/settings')) options.leftClass = 'settings';
         if (url.includes('/about') || url.includes('torrents') || url.includes('autodlstatus')) {
@@ -139,7 +147,7 @@ class SidePanel {
             if (html === null) return;
             this.setContent(html, 'left', options);
         } catch (error) {
-            this.panel.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            this.renderError(error);
         }
     }
 
@@ -151,7 +159,7 @@ class SidePanel {
             if (html === null) return;
             this.setContent(html, 'right', options);
         } catch (error) {
-            this.panel.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            this.renderError(error);
         }
     }
 

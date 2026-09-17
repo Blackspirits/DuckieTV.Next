@@ -2,8 +2,15 @@
 
 namespace App\Services\TorrentSearchEngines;
 
+use App\Support\MagnetUri;
+use App\Support\TorrentSize;
 use Exception;
+use GuzzleHttp\Psr7\Uri;
+use GuzzleHttp\Psr7\UriResolver;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -23,6 +30,12 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 class GenericSearchEngine implements SearchEngineInterface
 {
+    protected const int CONNECT_TIMEOUT_SECONDS = 3;
+
+    protected const int REQUEST_TIMEOUT_SECONDS = 8;
+
+    private const int MAX_DETAILS_REDIRECTS = 3;
+
     /** @var array The search engine configuration */
     protected array $config;
 
@@ -57,7 +70,7 @@ class GenericSearchEngine implements SearchEngineInterface
      *
      * @param  string  $query  The search query
      * @param  string|null  $sortBy  Sorting parameter (e.g. 'seeders.d')
-     * @return array Array of results with releasename, size, seeders, leechers, magnetUrl, etc.
+     * @return array Array of results with releasename, sizeBytes, sizeParseError, seeders, leechers, magnetUrl, etc.
      *
      * @throws Exception if the HTTP request fails
      */
@@ -66,7 +79,7 @@ class GenericSearchEngine implements SearchEngineInterface
         $url = $this->buildSearchUrl($query, $sortBy);
 
         /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::withHeaders([
+        $response = $this->boundedHttp()->withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language' => 'en-US,en;q=0.9',
@@ -94,17 +107,201 @@ class GenericSearchEngine implements SearchEngineInterface
             return [];
         }
 
-        /** @var \Illuminate\Http\Client\Response $response */
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        ])->get($url);
+        $response = $this->fetchTrustedDetailsPage($url);
 
         if (! $response->successful()) {
-            throw new Exception("Details request failed for {$this->name} at {$url} (Status: {$response->status()})");
+            throw new Exception("Details request failed for {$this->name} (Status: {$response->status()})");
         }
 
         return $this->parseDetails($response->body(), $releaseName);
+    }
+
+    /**
+     * Fetch a details page while keeping every hop on the configured mirror origin.
+     */
+    protected function fetchTrustedDetailsPage(string $url): Response
+    {
+        for ($redirects = 0; $redirects <= self::MAX_DETAILS_REDIRECTS; $redirects++) {
+            $this->assertTrustedDetailsUrl($url);
+
+            $response = $this->boundedHttp()->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            ])->withoutRedirecting()->get($url);
+
+            if (! $response instanceof Response) {
+                throw new Exception("Unexpected asynchronous response while fetching details for {$this->name}");
+            }
+
+            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {
+                return $response;
+            }
+
+            if ($redirects === self::MAX_DETAILS_REDIRECTS) {
+                throw new Exception("Too many redirects while fetching details for {$this->name}");
+            }
+
+            $location = $response->header('Location');
+            if ($location === '') {
+                throw new Exception("Invalid redirect while fetching details for {$this->name}");
+            }
+
+            $url = (string) UriResolver::resolve(new Uri($url), new Uri($location));
+        }
+
+        throw new Exception("Unable to fetch details for {$this->name}");
+    }
+
+    /**
+     * Create a bounded HTTP request for all torrent-search network I/O.
+     */
+    protected function boundedHttp(): PendingRequest
+    {
+        return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+            ->timeout(self::REQUEST_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * Ensure a details URL stays on the exact configured mirror origin and cannot target local/private IP literals.
+     */
+    protected function assertTrustedDetailsUrl(string $url): void
+    {
+        $target = parse_url($url);
+        $mirror = parse_url((string) ($this->config['mirror'] ?? ''));
+
+        if (! is_array($target) || ! is_array($mirror)
+            || ! isset($target['scheme'], $target['host'], $mirror['scheme'], $mirror['host'])) {
+            throw new InvalidArgumentException('Invalid torrent details URL.');
+        }
+
+        $targetScheme = strtolower($target['scheme']);
+        $mirrorScheme = strtolower($mirror['scheme']);
+        $targetHost = $this->normalizeHost($target['host']);
+        $mirrorHost = $this->normalizeHost($mirror['host']);
+
+        if (! in_array($targetScheme, ['http', 'https'], true)
+            || $targetScheme !== $mirrorScheme
+            || $targetHost !== $mirrorHost
+            || $this->effectivePort($target) !== $this->effectivePort($mirror)
+            || isset($target['user'])
+            || isset($target['pass'])) {
+            throw new InvalidArgumentException('Torrent details URL is outside the configured search-engine origin.');
+        }
+
+        if ($this->isBlockedHost($targetHost)) {
+            throw new InvalidArgumentException('Torrent details URL targets a local or private address.');
+        }
+    }
+
+    protected function normalizeHost(string $host): string
+    {
+        return strtolower(rtrim(trim($host, '[]'), '.'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $parts
+     */
+    protected function effectivePort(array $parts): int
+    {
+        if (isset($parts['port'])) {
+            return (int) $parts['port'];
+        }
+
+        return strtolower((string) ($parts['scheme'] ?? '')) === 'https' ? 443 : 80;
+    }
+
+    protected function isBlockedHost(string $host): bool
+    {
+        if ($host === 'localhost' || str_ends_with($host, '.localhost')) {
+            return true;
+        }
+
+        if (! filter_var($host, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        return filter_var(
+            $host,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        ) === false;
+    }
+
+    /**
+     * Accept only actual magnet URIs carrying a canonicalizable BTIH.
+     */
+    protected function normalizeMagnetUrl(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+
+        $url = trim($url);
+        if ($url === '' || ! str_starts_with(strtolower($url), 'magnet:?')) {
+            return null;
+        }
+
+        return MagnetUri::extractInfoHash($url) !== null ? $url : null;
+    }
+
+    /**
+     * Resolve an extracted link against the configured mirror and allow only
+     * public HTTP(S) destinations without embedded credentials.
+     */
+    protected function resolveHttpUrl(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+
+        $url = trim($url);
+        $mirror = trim((string) ($this->config['mirror'] ?? ''));
+
+        if ($url === '' || $mirror === '' || preg_match('/[\\x00-\\x1F\\x7F]/', $url) === 1) {
+            return null;
+        }
+
+        try {
+            $resolved = (string) UriResolver::resolve(new Uri($mirror), new Uri($url));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $parts = parse_url($resolved);
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower($parts['scheme']);
+        $host = $this->normalizeHost($parts['host']);
+
+        if (! in_array($scheme, ['http', 'https'], true)
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || $this->isBlockedHost($host)) {
+            return null;
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Resolve a details link and keep it on the exact configured mirror origin.
+     */
+    protected function resolveTrustedDetailUrl(?string $url): ?string
+    {
+        $resolved = $this->resolveHttpUrl($url);
+        if ($resolved === null) {
+            return null;
+        }
+
+        try {
+            $this->assertTrustedDetailsUrl($resolved);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+
+        return $resolved;
     }
 
     /**
@@ -165,33 +362,53 @@ class GenericSearchEngine implements SearchEngineInterface
             $seeders = (int) preg_replace('/[^0-9]/', '', $seeders ?? '0');
             $leechers = (int) preg_replace('/[^0-9]/', '', $leechers ?? '0');
 
+            $rawSize = $this->getPropertyForSelector($node, $selectors['size']);
+            $parsedSize = TorrentSize::parse($rawSize);
+
+            $detailUrl = $this->resolveTrustedDetailUrl(
+                $this->getPropertyForSelector($node, $selectors['detailUrl'])
+            );
+
             $out = [
                 'releasename' => trim($releasename),
-                'size' => $this->sizeToMB($this->getPropertyForSelector($node, $selectors['size'])),
+                'sizeBytes' => $parsedSize['sizeBytes'],
+                'sizeParseError' => $parsedSize['sizeParseError'],
+                // Transitional presentation-only field for JSON compatibility.
+                'size' => TorrentSize::format($parsedSize['sizeBytes']),
                 'seeders' => $seeders,
                 'leechers' => $leechers,
-                'detailUrl' => (($this->config['includeBaseURL'] ?? false) ? $this->config['mirror'] : '').$this->getPropertyForSelector($node, $selectors['detailUrl']),
+                'detailUrl' => $detailUrl,
                 'noMagnet' => true,
                 'noTorrent' => true,
             ];
 
-            $magnet = $this->getPropertyForSelector($node, $selectors['magnetUrl'] ?? null);
-            $torrent = $this->getPropertyForSelector($node, $selectors['torrentUrl'] ?? null);
+            $magnet = $this->normalizeMagnetUrl(
+                $this->getPropertyForSelector($node, $selectors['magnetUrl'] ?? null)
+            );
+            $torrent = $this->resolveHttpUrl(
+                $this->getPropertyForSelector($node, $selectors['torrentUrl'] ?? null)
+            );
 
-            if ($magnet) {
+            $infoHash = $magnet !== null ? MagnetUri::extractInfoHash($magnet) : null;
+
+            if ($magnet !== null) {
                 $out['magnetUrl'] = $magnet;
                 $out['noMagnet'] = false;
             }
 
-            if ($torrent) {
-                $out['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
+            if ($infoHash !== null) {
+                $out['infoHash'] = $infoHash;
+            }
+
+            if ($torrent !== null) {
+                $out['torrentUrl'] = $torrent;
                 $out['noTorrent'] = false;
-            } elseif (isset($out['magnetUrl']) && preg_match('/([0-9ABCDEFabcdef]{40})/', $out['magnetUrl'], $matches)) {
-                $out['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($matches[1]).'.torrent?title='.urlencode(trim($out['releasename']));
+            } elseif ($infoHash !== null) {
+                $out['torrentUrl'] = 'https://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($out['releasename']));
                 $out['noTorrent'] = false;
             }
 
-            if (isset($this->config['detailsSelectors'])) {
+            if ($detailUrl !== null && isset($this->config['detailsSelectors'])) {
                 if (isset($this->config['detailsSelectors']['magnetUrl'])) {
                     $out['noMagnet'] = false;
                 }
@@ -220,17 +437,27 @@ class GenericSearchEngine implements SearchEngineInterface
         }
 
         $output = [];
-        $magnet = $this->getPropertyForSelector($container, $selectors['magnetUrl'] ?? null);
+        $magnet = $this->normalizeMagnetUrl(
+            $this->getPropertyForSelector($container, $selectors['magnetUrl'] ?? null)
+        );
 
-        if ($magnet) {
+        $infoHash = $magnet !== null ? MagnetUri::extractInfoHash($magnet) : null;
+
+        if ($magnet !== null) {
             $output['magnetUrl'] = $magnet;
         }
 
-        $torrent = $this->getPropertyForSelector($container, $selectors['torrentUrl'] ?? null);
-        if ($torrent) {
-            $output['torrentUrl'] = str_starts_with($torrent, 'http') ? $torrent : $this->config['mirror'].$torrent;
-        } elseif (isset($output['magnetUrl']) && preg_match('/([0-9ABCDEFabcdef]{40})/', $output['magnetUrl'], $matches)) {
-            $output['torrentUrl'] = 'http://itorrents.org/torrent/'.strtoupper($matches[1]).'.torrent?title='.urlencode(trim($releaseName));
+        if ($infoHash !== null) {
+            $output['infoHash'] = $infoHash;
+        }
+
+        $torrent = $this->resolveHttpUrl(
+            $this->getPropertyForSelector($container, $selectors['torrentUrl'] ?? null)
+        );
+        if ($torrent !== null) {
+            $output['torrentUrl'] = $torrent;
+        } elseif ($infoHash !== null) {
+            $output['torrentUrl'] = 'https://itorrents.org/torrent/'.strtoupper($infoHash).'.torrent?title='.urlencode(trim($releaseName));
         }
 
         return $output;
@@ -268,46 +495,5 @@ class GenericSearchEngine implements SearchEngineInterface
         } catch (Exception $e) {
             return null;
         }
-    }
-
-    /**
-     * Convert various size strings (GB, MB, KiB, etc.) to a standardized MB string.
-     *
-     * @return string Converted size (e.g., "123.45 MB")
-     */
-    protected function sizeToMB(?string $size): string
-    {
-        if (! $size) {
-            return '0 MB';
-        }
-
-        if (preg_match('/([0-9.]+)\s*([KTMG]B|[KTMG]iB|Bytes|B)/i', $size, $matches)) {
-            $value = (float) $matches[1];
-            $unit = strtoupper($matches[2]);
-
-            switch ($unit) {
-                case 'B':
-                case 'BYTES':
-                    return number_format($value / 1000 / 1000, 2).' MB';
-                case 'KB':
-                    return number_format($value / 1000, 2).' MB';
-                case 'MB':
-                    return number_format($value, 2).' MB';
-                case 'GB':
-                    return number_format($value * 1000, 2).' MB';
-                case 'TB':
-                    return number_format($value * 1000 * 1000, 2).' MB';
-                case 'KIB':
-                    return number_format(($value * 1024) / 1000 / 1000, 2).' MB';
-                case 'MIB':
-                    return number_format(($value * 1024 * 1024) / 1000 / 1000, 2).' MB';
-                case 'GIB':
-                    return number_format(($value * 1024 * 1024 * 1024) / 1000 / 1000, 2).' MB';
-                case 'TIB':
-                    return number_format(($value * 1024 * 1024 * 1024 * 1024) / 1000 / 1000, 2).' MB';
-            }
-        }
-
-        return $size;
     }
 }

@@ -49,7 +49,7 @@
             </tr>
             <tr>
                 <th>FIRST AIRED</th>
-                <td>{{ $serie->firstaired ? $serie->firstaired->format('M d, Y') : 'Unknown' }}</td>
+                <td>{{ $serie->getFirstAiredDate()?->format('M d, Y') ?? 'Unknown' }}</td>
             </tr>
             <tr>
                 <th>GENRE</th>
@@ -73,7 +73,7 @@
                 <th>NETWORK</th>
                 <td>{{ $serie->network }}</td>
             </tr>
-            @if($serie->rating)
+            @if(settings()->get('download.ratings', true) && $serie->rating)
             <tr>
                 <th>RATING</th>
                 <td>{{ $serie->rating }}% ({{ $serie->ratingcount }} votes)</td>

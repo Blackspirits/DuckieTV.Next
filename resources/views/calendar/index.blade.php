@@ -14,8 +14,15 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
-    <calendar id="calendar-content" event-service="CalendarEvents" view="date">
+    <calendar
+        id="calendar-content"
+        event-service="CalendarEvents"
+        view="{{ $mode === 'week' ? 'week' : 'date' }}"
+        data-initial-mode="{{ $mode }}"
+        data-initial-date="{{ $currentDate->toDateString() }}"
+    >
         @include('calendar.partial')
+        @include('calendar.state')
     </calendar>
 </div>
 @endsection

@@ -2,6 +2,7 @@
 
 namespace App\Services\TorrentClients;
 
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 
 /**
@@ -24,13 +25,12 @@ class VuzeClient extends TransmissionClient
     public function getValidationRules(): array
     {
         return [
-            'vuze.server' => 'nullable|url',
-            'vuze.port' => 'nullable|integer',
+            'vuze.server' => ['nullable', 'string', new ValidTorrentClientServer],
+            'vuze.port' => 'nullable|integer|min:1|max:65535',
             'vuze.path' => 'nullable|string',
             'vuze.use_auth' => 'boolean',
             'vuze.username' => 'nullable|string',
             'vuze.password' => 'nullable|string',
-            'vuze.progressX100' => 'boolean',
         ];
     }
 
@@ -46,7 +46,6 @@ class VuzeClient extends TransmissionClient
             'username' => 'vuze.username',
             'password' => 'vuze.password',
             'use_auth' => 'vuze.use_auth',
-            'progressX100' => 'vuze.progressX100',
         ];
     }
 }

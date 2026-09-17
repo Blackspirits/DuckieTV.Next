@@ -45,7 +45,9 @@
         @if(settings('torrenting.enabled'))
             {{-- Client-Specific Settings Links --}}
             @php
-                $currentClientName = settings('torrenting.client');
+                // Render the client that the runtime actually resolved. This keeps
+                // legacy unsupported selections read-only while showing the safe fallback.
+                $currentClientName = app(\App\Services\TorrentClientService::class)->getActiveClient()?->getName();
             @endphp
             
             @foreach($supportedClients as $clientKey => $clientData)
@@ -89,6 +91,13 @@
                     </a>
                 </td>
             </tr>
+            <tr>
+                <td colspan="2">
+                    <a href="#" data-sidepanel-expand="{{ route('settings.show', 'jackett-search') }}">
+                        <i class="glyphicon glyphicon-link"></i><strong>Jackett / Torznab</strong>
+                    </a>
+                </td>
+            </tr>
         @endif
 
         <tr>
@@ -99,6 +108,7 @@
             </td>
         </tr>
 
+        @if(app(\App\Services\SubtitlesService::class)->isRuntimeAvailable())
         <tr>
             <td colspan="2">
                 <a href="#" data-sidepanel-expand="{{ route('settings.show', 'subtitles') }}">
@@ -106,6 +116,7 @@
                 </a>
             </td>
         </tr>
+        @endif
         <tr>
             <td colspan="2">
                 <a href="#" data-sidepanel-expand="{{ route('settings.show', 'miscellaneous') }}">

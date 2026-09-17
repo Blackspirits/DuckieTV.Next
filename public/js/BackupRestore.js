@@ -1,5 +1,8 @@
 window.BackupRestore = {
     pollingInterval: null,
+    refreshPollingInterval: null,
+    autoBackupStatusInterval: null,
+    autoBackupModal: null,
     lastLogCount: 0,
     selectedFile: null,
     progressModal: null,
@@ -15,15 +18,17 @@ window.BackupRestore = {
     init: function (i18n = {}) {
         this.i18n = i18n;
         console.log('BackupRestore: init');
-        // Check if a restore is already in progress
+        // Check if restore/refresh maintenance is already in progress.
         this.checkExistingRestore();
+        this.checkExistingDatabaseRefresh();
+        this.initAutoBackup();
     },
 
     checkExistingRestore: function () {
         fetch('/settings/restore/progress')
             .then(response => response.json())
             .then(data => {
-                if (data.status === 'running' || data.status === 'extracting') {
+                if (['queued', 'running', 'extracting', 'cancelling'].includes(data.status)) {
                     console.log('BackupRestore: Ongoing restore detected');
                     this.status = data.status;
                     // Default to minimized view on page load if it's already running
@@ -184,6 +189,345 @@ window.BackupRestore = {
         this.selectedFile = null;
     },
 
+    wipeDatabase: function () {
+        const title = this.i18n['COMMON/wipe/hdr'] || 'Wipe database and settings';
+        const message = this.i18n['BACKUPCTRLjs/wipe/desc'] || 'Do you really want to remove all series and episodes from the DuckieTV database and clear all the settings?';
+
+        Modal.confirm(title, `<p>${message}</p>`, () => {
+            const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+            fetch('/settings/wipe', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                    'Accept': 'application/json'
+                }
+            })
+                .then(async response => {
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Database wipe failed.');
+                    }
+
+                    window.location.reload();
+                })
+                .catch(error => {
+                    const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                    alert(`${prefix}: ${error.message}`);
+                });
+        });
+    },
+
+    checkExistingDatabaseRefresh: function () {
+        fetch('/settings/refresh/progress')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'queued' || data.status === 'running') {
+                    this.startDatabaseRefreshPolling(data);
+                }
+            })
+            .catch(err => console.error('Database refresh check error:', err));
+    },
+
+    refreshDatabase: function () {
+        const button = document.getElementById('refreshDatabaseButton');
+        if (button) button.disabled = true;
+
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/refresh', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Accept': 'application/json'
+            }
+        })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Database refresh failed to start.');
+                }
+
+                this.startDatabaseRefreshPolling({
+                    status: 'queued',
+                    total: data.total || 0,
+                    processed: 0,
+                    current: null
+                });
+            })
+            .catch(error => {
+                if (button) button.disabled = false;
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+            });
+    },
+
+    startDatabaseRefreshPolling: function (initialData = null) {
+        if (this.refreshPollingInterval) {
+            clearInterval(this.refreshPollingInterval);
+        }
+
+        const data = initialData || {};
+        const total = Number(data.total || 0);
+
+        if (window.QueryMonitor) {
+            window.QueryMonitor.start(total, 'series');
+            window.QueryMonitor.update(Number(data.processed || 0), total, data.current || 'series');
+        }
+
+        const button = document.getElementById('refreshDatabaseButton');
+        if (button) button.disabled = true;
+
+        this.refreshPollingInterval = setInterval(() => {
+            fetch('/settings/refresh/progress')
+                .then(response => response.json())
+                .then(progress => {
+                    const processed = Number(progress.processed || 0);
+                    const progressTotal = Number(progress.total || 0);
+
+                    if (window.QueryMonitor) {
+                        window.QueryMonitor.update(
+                            processed,
+                            progressTotal,
+                            progress.current || 'series'
+                        );
+                    }
+
+                    if (progress.status === 'completed' || progress.status === 'failed') {
+                        clearInterval(this.refreshPollingInterval);
+                        this.refreshPollingInterval = null;
+
+                        if (window.QueryMonitor) {
+                            if (progress.status === 'completed') {
+                                window.QueryMonitor.update(progressTotal, progressTotal, 'series');
+                            }
+                            window.QueryMonitor.finish();
+                        }
+
+                        if (button) button.disabled = false;
+
+                        if (progress.status === 'failed') {
+                            const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                            alert(`${prefix}: ${progress.message || 'Database refresh failed.'}`);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Database refresh polling error:', error);
+                });
+        }, 1000);
+    },
+
+    initAutoBackup: function () {
+        if (this.autoBackupStatusInterval) {
+            clearInterval(this.autoBackupStatusInterval);
+        }
+
+        this.refreshAutoBackupStatus();
+        this.autoBackupStatusInterval = setInterval(() => {
+            this.refreshAutoBackupStatus();
+        }, 60000);
+    },
+
+    refreshAutoBackupStatus: function () {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const statusUrl = '/settings/autobackup/status?timezone=' + encodeURIComponent(timezone);
+
+        fetch(statusUrl, {
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Auto-backup status unavailable.');
+                }
+
+                return data;
+            })
+            .then(data => {
+                this.updateAutoBackupSchedule(data);
+
+                if (!data.due || !data.next_run_ms || this.autoBackupModal) {
+                    return;
+                }
+
+                const dueKey = String(data.next_run_ms);
+                if (sessionStorage.getItem('autobackup.dismissed') === dueKey) {
+                    return;
+                }
+
+                this.showAutoBackupPrompt(dueKey);
+            })
+            .catch(error => console.error('Auto-backup status error:', error));
+    },
+
+    updateAutoBackupSchedule: function (data) {
+        const select = document.getElementById('autoBackup');
+        if (select && data.period) {
+            select.value = data.period;
+        }
+
+        const nextRun = document.getElementById('autoBackupNextRun');
+        if (!nextRun) return;
+
+        if (!data.next_run_ms) {
+            nextRun.textContent = '—';
+            return;
+        }
+
+        nextRun.textContent = new Date(Number(data.next_run_ms)).toLocaleString();
+    },
+
+    saveAutoBackupPeriod: function (period) {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/backup', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : '',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                'autobackup.period': period
+            })
+        })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Failed to update auto-backup period.');
+                }
+
+                sessionStorage.removeItem('autobackup.dismissed');
+                this.refreshAutoBackupStatus();
+            })
+            .catch(error => {
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+                this.refreshAutoBackupStatus();
+            });
+    },
+
+    showAutoBackupPrompt: function (dueKey) {
+        const body = document.createElement('p');
+        body.textContent = this.i18n['COMMON/backup/desc']
+            || 'Create a backup of your series / episodes / watched list.';
+
+        const footer = document.createElement('div');
+        const createButton = document.createElement('button');
+        createButton.type = 'button';
+        createButton.className = 'btn btn-success';
+        createButton.textContent = this.i18n['COMMON/create/btn'] || 'Create Database Backup';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'btn btn-danger';
+        cancelButton.textContent = this.i18n['COMMON/cancel/btn'] || 'Cancel';
+
+        footer.appendChild(createButton);
+        footer.appendChild(document.createTextNode(' '));
+        footer.appendChild(cancelButton);
+
+        const modal = new Modal({
+            backdrop: 'static',
+            keyboard: false,
+            size: 'lg'
+        });
+
+        modal.show(
+            this.i18n['COMMON/autobackup/hdr'] || 'Auto-Backup',
+            body,
+            footer,
+            'dialog-header-confirm'
+        );
+
+        this.autoBackupModal = modal;
+
+        createButton.addEventListener('click', () => {
+            sessionStorage.setItem('autobackup.dismissed', dueKey);
+            modal.hide();
+            this.autoBackupModal = null;
+            this.downloadAutoBackup(dueKey);
+        });
+
+        cancelButton.addEventListener('click', () => {
+            sessionStorage.setItem('autobackup.dismissed', dueKey);
+            modal.hide();
+            this.autoBackupModal = null;
+        });
+    },
+
+    downloadManualBackup: function () {
+        fetch('/settings/backup/export', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(response => this.downloadBackupResponse(response))
+            .catch(error => {
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+            });
+    },
+
+    downloadBackupResponse: async function (response) {
+        if (!response.ok) {
+            let message = 'Backup failed.';
+            try {
+                const data = await response.json();
+                message = data.message || message;
+            } catch (error) {
+                console.error('Backup error response parsing failed:', error);
+            }
+
+            throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="([^"]+)"/i);
+        const filename = filenameMatch
+            ? filenameMatch[1]
+            : 'DuckieTV.backup';
+
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    },
+
+    downloadAutoBackup: function (dueKey) {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+
+        fetch('/settings/autobackup/export', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenMeta ? tokenMeta.getAttribute('content') : ''
+            }
+        })
+            .then(response => this.downloadBackupResponse(response))
+            .then(() => {
+                this.refreshAutoBackupStatus();
+            })
+            .catch(error => {
+                sessionStorage.removeItem('autobackup.dismissed');
+                const prefix = this.i18n['COMMON/error/hdr'] || 'Error';
+                alert(`${prefix}: ${error.message}`);
+                console.error('Auto-backup download failed for due run:', dueKey, error);
+            });
+    },
+
     clearInput: function () {
         const input = document.getElementById('backupInput');
         if (input) input.value = '';
@@ -247,7 +591,7 @@ window.BackupRestore = {
 
         let statusMsg = `${this.i18n['COMMON/loading-please-wait/lbl'] || 'Processing...'} ${percent}%`;
         if (data.status === 'extracting') statusMsg = this.i18n['BACKUPCTRLjs/progress/extracting'] || 'Extracting backup file...';
-        if (statusText) statusText.innerHTML = statusMsg;
+        if (statusText) statusText.textContent = statusMsg;
 
         if (data.show && data.type === 'show_progress') {
             if (showProgressDiv) {
@@ -255,10 +599,18 @@ window.BackupRestore = {
                 const showTitle = showProgressDiv.querySelector('.restore-show-text');
                 const showBar = showProgressDiv.querySelector('.show-progress-bar');
 
-                let showMsg = `${this.i18n['COMMON/searching/lbl'] || 'Restoring'}: <strong>${data.show}</strong>`;
-                if (data.season) showMsg += ` (${this.i18n['COMMON/season/lbl'] || 'Season'} ${data.season})`;
+                if (showTitle) {
+                    const prefix = this.i18n['COMMON/searching/lbl'] || 'Restoring';
+                    const strong = document.createElement('strong');
+                    strong.textContent = String(data.show);
 
-                if (showTitle) showTitle.innerHTML = showMsg;
+                    showTitle.replaceChildren(document.createTextNode(`${prefix}: `), strong);
+
+                    if (data.season) {
+                        const seasonLabel = this.i18n['COMMON/season/lbl'] || 'Season';
+                        showTitle.appendChild(document.createTextNode(` (${seasonLabel} ${data.season})`));
+                    }
+                }
                 if (showBar) showBar.style.width = (data.percent || 0) + '%';
             }
         } else if (data.status === 'running') {
@@ -291,8 +643,12 @@ window.BackupRestore = {
             failuresContainer.style.display = 'block';
             if (this.failedSeries.length > this.lastFailedCount) {
                 for (let i = this.lastFailedCount; i < this.failedSeries.length; i++) {
+                    const failure = this.failedSeries[i];
                     const li = document.createElement('li');
-                    li.innerHTML = `<strong>${this.failedSeries[i].time}</strong>: ${this.failedSeries[i].id} - ${this.failedSeries[i].error}`;
+                    const time = document.createElement('strong');
+                    time.textContent = String(failure.time ?? '');
+                    li.appendChild(time);
+                    li.appendChild(document.createTextNode(`: ${failure.id ?? ''} - ${failure.error ?? ''}`));
                     failuresList.appendChild(li);
                 }
                 this.lastFailedCount = this.failedSeries.length;

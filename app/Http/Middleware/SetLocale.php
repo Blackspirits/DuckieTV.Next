@@ -24,20 +24,21 @@ class SetLocale
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $locale = settings()->get('application.locale', config('app.locale'));
-        $locale = str_replace('-', '_', $locale);
-        $availableLocales = $this->translationService->getAvailableLocales();
+        $requestedLocale = settings()->get('application.locale', config('app.locale'));
+        $requestedLocale = is_string($requestedLocale) ? $requestedLocale : null;
 
-        if (! empty($locale) && array_key_exists($locale, $availableLocales)) {
+        $locale = $this->translationService->resolveLocale($requestedLocale)
+            ?? $this->translationService->resolveLocale((string) config('app.fallback_locale', 'en_US'))
+            ?? $this->translationService->resolveLocale((string) config('app.locale', 'en_US'))
+            ?? $this->translationService->resolveLocale('en_US');
+
+        if ($locale === null) {
+            $availableLocales = $this->translationService->getAvailableLocales();
+            $locale = array_key_first($availableLocales);
+        }
+
+        if (is_string($locale) && $locale !== '') {
             App::setLocale($locale);
-        } else {
-            // Fallback mechanisms
-            if ($locale === 'en' && array_key_exists('en_US', $availableLocales)) {
-                App::setLocale('en_US');
-            } elseif (! empty($availableLocales)) {
-                // Use first available locale if the requested one is not found
-                App::setLocale(array_key_first($availableLocales));
-            }
         }
 
         return $next($request);

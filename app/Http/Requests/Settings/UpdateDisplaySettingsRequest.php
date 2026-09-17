@@ -14,14 +14,11 @@ class UpdateDisplaySettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'display.top_sites' => 'boolean',
-            'display.top_sites_mode' => 'in:onhover,onclick',
-            'display.show_ratings' => 'boolean',
-            'display.not_watched_eps_btn' => 'boolean',
-            'display.transitions' => 'boolean',
-            'display.bg_opacity' => 'numeric|min:0|max:1',
-            'notifications.enabled' => 'boolean',
-            'display.mixed_case' => 'boolean',
+            'download.ratings' => 'boolean',
+            'series.not-watched-eps-btn' => 'boolean',
+            'library.seriesgrid' => 'boolean',
+            'background-rotator.opacity' => 'numeric|min:0|max:1',
+            'font.bebas.enabled' => 'boolean',
             'kc.always' => 'boolean',
         ];
     }

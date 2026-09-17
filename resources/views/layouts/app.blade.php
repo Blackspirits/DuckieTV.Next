@@ -17,6 +17,20 @@
     <link rel="stylesheet" href="{{ asset('css/toasts.css') }}">
     <link rel="stylesheet" href="{{ asset('css/dialogs.css') }}">
 
+    @if(! (bool) settings()->get('font.bebas.enabled', true))
+    <style id="bebas-override">
+        h1, h2, h3, strong, .inline-checkbox label, sidepanel .buttons .torrent-mini-remote-control > span, .settings .buttons .btn {
+            font-family: helvetica, sans-serif !important;
+        }
+        strong {
+            font-weight: bold !important;
+        }
+        strong, sidepanel .buttons .torrent-mini-remote-control > span, sidepanel .buttons strong {
+            letter-spacing: normal !important;
+        }
+    </style>
+    @endif
+
     <style>
         /* Only styles NOT covered by legacy CSS */
         body {
@@ -42,7 +56,7 @@
     </div>
 
     <background-rotator channel="'background:load'">
-        <div class="background-image-container">
+        <div class="background-image-container" style="opacity: {{ settings()->get('background-rotator.opacity', 0.4) }}">
             <div class="placeholder active"></div>
             <div class="bg1"></div>
             <div class="bg2"></div>
@@ -77,9 +91,11 @@
                 <li id="actionbar_search">
                     <a href="{{ route('torrents.search-dialog') }}" title="{{ __('TORRENTDIALOG/search-download-any/tooltip') }}" class="glyphicon glyphicon-download" data-torrent-search-show></a>
                 </li>
+                @if(app(\App\Services\SubtitlesService::class)->isRuntimeAvailable())
                 <li id="actionbar_subtitles">
                     <a href="{{ route('subtitles.index') }}" title="{{ __('COMMON/find-subtitle/lbl') }}" class="glyphicon glyphicon-text-width" data-subtitles-search-show></a>
                 </li>
+                @endif
                 {{-- TorrentClientComposer injects $activeClient and $clientClass --}}
                 <li id="actionbar_torrent">
                     <a href="#" title="{{ $activeClient ? $activeClient->getName() : 'DuckieTorrent' }}" class="glyphicon {{ $clientClass }}"
@@ -133,6 +149,7 @@
     <script src="{{ asset('js/SidePanel.js') }}"></script>
     <script src="{{ asset('js/Calendar.js') }}"></script>
     <script src="{{ asset('js/BackgroundRotator.js') }}"></script>
+    <script src="{{ asset('js/SeriesGrid.js') }}"></script>
     <script src="{{ asset('js/TorrentSearch.js') }}"></script>
     <script src="{{ asset('js/TraktTrending.js') }}"></script>
     <script src="{{ asset('js/Subtitles.js') }}"></script>
@@ -177,6 +194,12 @@
                 'BACKUPCTRLjs/restore/wipe-warn': '{{ __("BACKUPCTRLjs/restore/wipe-warn") }}',
                 'BACKUPCTRLjs/restore/merge-info': '{{ __("BACKUPCTRLjs/restore/merge-info") }}',
                 'BACKUPCTRLjs/restore/confirm-hdr': '{{ __("BACKUPCTRLjs/restore/confirm-hdr") }}',
+                'COMMON/wipe/hdr': '{{ __("COMMON/wipe/hdr") }}',
+                'BACKUPCTRLjs/wipe/desc': '{{ __("BACKUPCTRLjs/wipe/desc") }}',
+                'COMMON/autobackup/hdr': '{{ __("COMMON/autobackup/hdr") }}',
+                'COMMON/backup/desc': '{{ __("COMMON/backup/desc") }}',
+                'COMMON/create/btn': '{{ __("COMMON/create/btn") }}',
+                'COMMON/cancel/btn': '{{ __("COMMON/cancel/btn") }}',
                 'COMMON/error/hdr': '{{ __("COMMON/error/hdr") }}',
                 'BACKUPCTRLjs/progress/restore-failed': '{{ __("BACKUPCTRLjs/progress/restore-failed") }}',
                 'BACKUPCTRLjs/progress/hdr': '{{ __("BACKUPCTRLjs/progress/hdr") }}',

@@ -19,18 +19,18 @@
         
         <div class="form-group">
             <label>{{ __('COMMON/address/lbl') }}</label>
-            <input type="url" name="deluge.server" class="form-control" value="{{ settings('deluge.server') }}" required>
+            <input type="url" name="deluge.server" class="form-control" value="{{ \App\Rules\ValidTorrentClientServer::displayValue(settings('deluge.server')) }}" required>
         </div>
 
         <div class="form-group">
             <label>{{ __('COMMON/port/lbl') }}</label>
-            <input type="number" name="deluge.port" class="form-control" value="{{ settings('deluge.port') }}" required min="0" max="65535">
+            <input type="number" name="deluge.port" class="form-control" value="{{ settings('deluge.port') }}" required min="1" max="65535">
         </div>
 
         {{-- Deluge typically requires only password for WebUI --}}
         <div class="form-group">
             <label>{{ __('COMMON/password/lbl') }}</label>
-            <input type="password" name="deluge.password" class="form-control" value="{{ settings('deluge.password') }}">
+            <input type="password" name="deluge.password" class="form-control" value="" autocomplete="new-password" placeholder="Leave blank to keep the saved password">
         </div>
 
         <button type="submit" class="btn btn-primary">{{ __('COMMON/test-save/btn') }}</button>

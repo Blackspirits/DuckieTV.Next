@@ -19,7 +19,7 @@ class ShowSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'section' => 'required|string|in:display,language,backup,calendar,torrent-search,jackett-search,subtitles,miscellaneous,torrent,auto-download,trakttv,utorrent,transmission,qbittorrent41plus,deluge,rtorrent,vuze,tixati,biglybt,ktorrent,aria2,utorrentwebui,ttorrent',
+            'section' => 'required|string|in:display,language,backup,calendar,torrent-search,jackett-search,subtitles,miscellaneous,torrent,auto-download,trakttv,transmission,qbittorrent41plus,deluge,rtorrent,vuze,tixati,biglybt,ktorrent,aria2,utorrentwebui,ttorrent',
         ];
     }
 }

@@ -20,8 +20,10 @@ use App\Services\TorrentSearchEngines\UindexEngine;
 use App\Services\TorrentSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('integration')]
 class TorrentSearchIntegrationTest extends TestCase
 {
     use RefreshDatabase;
@@ -52,8 +54,6 @@ class TorrentSearchIntegrationTest extends TestCase
 
     /**
      * Test a specific search engine.
-     *
-     * @group integration
      */
     #[DataProvider('engineProvider')]
     public function test_search_engine(string $engineClass): void

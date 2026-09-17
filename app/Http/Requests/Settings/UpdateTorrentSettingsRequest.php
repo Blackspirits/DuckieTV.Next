@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Services\TorrentClientService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateTorrentSettingsRequest extends FormRequest
 {
@@ -13,21 +15,16 @@ class UpdateTorrentSettingsRequest extends FormRequest
 
     public function rules(): array
     {
+        $clientService = app(TorrentClientService::class);
+
         $rules = [
-            'torrenting.enabled' => 'sometimes|boolean',
-            'torrenting.client' => 'sometimes|required|string',
-            'torrenting.require_keywords' => 'sometimes|nullable|string',
-            'torrenting.require_keywords_enabled' => 'sometimes|boolean',
-            'torrenting.require_keywords_mode_or' => 'sometimes|boolean',
-            'torrenting.searchprovider' => 'sometimes|nullable|string',
-            'torrenting.searchquality' => 'sometimes|nullable|string',
-            'torrenting.streaming' => 'sometimes|boolean',
-            'torrenting.directory' => 'sometimes|boolean',
+            'torrenting.enabled' => ['sometimes', 'boolean'],
+            'torrenting.client' => ['sometimes', 'required', 'string', Rule::in($clientService->getAvailableClients())],
+            'torrenting.label' => ['sometimes', 'boolean'],
         ];
 
-        $service = app(\App\Services\TorrentClientService::class);
-        foreach ($service->getAvailableClients() as $name) {
-            $client = $service->getClient($name);
+        foreach ($clientService->getAvailableClients() as $name) {
+            $client = $clientService->getClient($name);
             if ($client) {
                 $rules = array_merge($rules, $client->getValidationRules());
             }

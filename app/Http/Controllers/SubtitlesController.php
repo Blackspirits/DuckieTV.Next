@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Episode;
 use App\Services\SubtitlesService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\View;
 
 class SubtitlesController extends Controller
 {
@@ -16,11 +15,20 @@ class SubtitlesController extends Controller
         $this->subtitlesService = $subtitlesService;
     }
 
+    private function ensureRuntimeAvailable(): void
+    {
+        if (! $this->subtitlesService->isRuntimeAvailable()) {
+            abort(410, 'Subtitle search requires migration to the current OpenSubtitles API.');
+        }
+    }
+
     /**
      * Return the subtitles search overlay shell.
      */
     public function index()
     {
+        $this->ensureRuntimeAvailable();
+
         return view('subtitles.index');
     }
 
@@ -29,6 +37,8 @@ class SubtitlesController extends Controller
      */
     public function search(Request $request)
     {
+        $this->ensureRuntimeAvailable();
+
         $request->validate([
             'episode_id' => 'required|exists:episodes,id',
             'languages' => 'sometimes|array',
@@ -40,11 +50,11 @@ class SubtitlesController extends Controller
         $results = $this->subtitlesService->searchByEpisode($episode, $languages);
 
         // Sort by language name as per original Angular logic
-        usort($results, fn($a, $b) => strcmp($a['attributes']['language_name'] ?? '', $b['attributes']['language_name'] ?? ''));
+        usort($results, fn ($a, $b) => strcmp($a['attributes']['language_name'] ?? '', $b['attributes']['language_name'] ?? ''));
 
         if ($request->ajax()) {
             return view('subtitles._rows', [
-                'results' => $results
+                'results' => $results,
             ])->render();
         }
 
@@ -59,6 +69,8 @@ class SubtitlesController extends Controller
      */
     public function searchByQuery(Request $request)
     {
+        $this->ensureRuntimeAvailable();
+
         $request->validate([
             'query' => 'required|string|min:3',
             'languages' => 'sometimes|array',
@@ -70,11 +82,11 @@ class SubtitlesController extends Controller
         $results = $this->subtitlesService->searchByQuery($query, $languages);
 
         // Sort by language name as per original Angular logic
-        usort($results, fn($a, $b) => strcmp($a['attributes']['language_name'] ?? '', $b['attributes']['language_name'] ?? ''));
+        usort($results, fn ($a, $b) => strcmp($a['attributes']['language_name'] ?? '', $b['attributes']['language_name'] ?? ''));
 
         if ($request->ajax()) {
             return view('subtitles._rows', [
-                'results' => $results
+                'results' => $results,
             ])->render();
         }
 

@@ -9,7 +9,7 @@ uses(RefreshDatabase::class);
 it('returns default values for unset keys', function () {
     $service = app(SettingsService::class);
 
-    expect($service->get('torrenting.client'))->toBe('uTorrent')
+    expect($service->get('torrenting.client'))->toBe('qBittorrent 4.1+')
         ->and($service->get('calendar.mode'))->toBe('date')
         ->and($service->get('calendar.startSunday'))->toBeTrue()
         ->and($service->get('autodownload.delay'))->toBe(15)

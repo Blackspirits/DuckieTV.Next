@@ -2,19 +2,32 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\RateLimitException;
+use App\Models\Episode;
+use App\Models\Season;
+use App\Services\DatabaseMaintenanceLock;
 use App\Services\FavoritesService;
 use App\Services\SceneNameResolverService;
+use App\Services\SeriesRefreshService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class SeriesController extends Controller
 {
     protected FavoritesService $favorites;
+
     protected SceneNameResolverService $sceneNameResolver;
 
-    public function __construct(FavoritesService $favorites, SceneNameResolverService $sceneNameResolver)
-    {
+    protected SeriesRefreshService $seriesRefresh;
+
+    public function __construct(
+        FavoritesService $favorites,
+        SceneNameResolverService $sceneNameResolver,
+        SeriesRefreshService $seriesRefresh
+    ) {
         $this->favorites = $favorites;
         $this->sceneNameResolver = $sceneNameResolver;
+        $this->seriesRefresh = $seriesRefresh;
     }
 
     /**
@@ -42,7 +55,7 @@ class SeriesController extends Controller
     {
         $serie = $this->favorites->getById($id);
 
-        if (!$serie) {
+        if (! $serie) {
             return abort(404, 'Show not found');
         }
 
@@ -64,7 +77,7 @@ class SeriesController extends Controller
     {
         $serie = $this->favorites->getById($id);
 
-        if (!$serie) {
+        if (! $serie) {
             return abort(404, 'Show not found');
         }
 
@@ -82,11 +95,11 @@ class SeriesController extends Controller
     {
         $serie = $this->favorites->getById($id);
 
-        if (!$serie) {
+        if (! $serie) {
             return abort(404, 'Show not found');
         }
 
-        $serie->load(['seasons' => fn($q) => $q->orderBy('seasonnumber')]);
+        $serie->load(['seasons' => fn ($q) => $q->orderBy('seasonnumber')]);
 
         return view('series._seasons', compact('serie'));
     }
@@ -96,7 +109,8 @@ class SeriesController extends Controller
      * Ported from episodes.html logic — shows one season at a time with navigation.
      *
      * When season_id is provided (e.g., from seasons grid click), shows that season.
-     * Otherwise, shows the first season with unwatched episodes (or the last season).
+     * Otherwise, follows the historical series.not-watched-eps-btn preference:
+     * first unwatched season when enabled, active aired season when disabled.
      *
      * @see templates/sidepanel/episodes.html in DuckieTV-angular
      */
@@ -104,7 +118,7 @@ class SeriesController extends Controller
     {
         $serie = $this->favorites->getById($id);
 
-        if (!$serie) {
+        if (! $serie) {
             return abort(404, 'Show not found');
         }
 
@@ -112,30 +126,56 @@ class SeriesController extends Controller
 
         // Determine which season to display
         $seasons = $serie->seasons->sortBy('seasonnumber');
+        $activeSeason = null;
+
         if ($season_id) {
-            $activeSeason = $seasons->firstWhere('id', $season_id);
+            foreach ($seasons as $season) {
+                if ($season->id === $season_id) {
+                    $activeSeason = $season;
+                    break;
+                }
+            }
         }
-        if (!isset($activeSeason) || !$activeSeason) {
-            // Default: first season with unwatched episodes, or last season
-            $activeSeason = $seasons->first(fn($s) => $s->episodes->where('watched', false)->isNotEmpty())
-                ?? $seasons->last();
+
+        if ($activeSeason === null) {
+            $activeSeason = (bool) settings()->get('series.not-watched-eps-btn', false)
+                ? $serie->getNotWatchedSeason()
+                : $serie->getActiveSeason();
+        }
+
+        if ($activeSeason === null) {
+            abort(404, 'Season not found');
         }
 
         // Pre-calculate search queries for episodes
         foreach ($activeSeason->episodes as $episode) {
-            $episode->search_query = $this->sceneNameResolver->getSearchStringForEpisode($serie, $episode);
+            $episode->setAttribute(
+                'search_query',
+                $this->sceneNameResolver->getSearchStringForEpisode($serie, $episode)
+            );
         }
 
         // Calculate search query for the whole season
-        $seasonSearchQuery = ($serie->customSearchString ?: $serie->name) . ' season ' . $activeSeason->seasonnumber;
+        $seasonSearchQuery = ($serie->customSearchString ?: $serie->name).' season '.$activeSeason->seasonnumber;
 
         // Calculate ratings data for the chart
-        $ratingPoints = $activeSeason->episodes->sortBy('episodenumber')->map(function ($episode) {
-            return [
-            'y' => $episode->rating ?? 0,
-            'label' => $episode->formatted_episode . ' : ' . ($episode->rating ?? 0) . '% (' . ($episode->ratingcount ?? 0) . ' ' . __('votes') . ')',
+        $ratingEpisodes = [];
+        foreach ($activeSeason->episodes as $episode) {
+            $ratingEpisodes[] = $episode;
+        }
+
+        usort(
+            $ratingEpisodes,
+            static fn (Episode $left, Episode $right): int => ($left->episodenumber ?? 0) <=> ($right->episodenumber ?? 0)
+        );
+
+        $ratingPoints = [];
+        foreach ($ratingEpisodes as $episode) {
+            $ratingPoints[] = [
+                'y' => $episode->rating ?? 0,
+                'label' => $episode->formatted_episode.' : '.($episode->rating ?? 0).'% ('.($episode->ratingcount ?? 0).' '.__('votes').')',
             ];
-        })->values();
+        }
 
         return view('series._episodes', [
             'serie' => $serie,
@@ -160,39 +200,35 @@ class SeriesController extends Controller
     {
         $serie = $this->favorites->getById($id);
 
-        if (!$serie) {
+        if (! $serie) {
             return abort(404, 'Show not found');
         }
 
         $action = $request->input('action');
+        $watchedDownloadedPaired = (bool) settings()->get('episode.watched-downloaded.pairing', true);
 
         if ($action === 'mark_watched') {
-            $serie->markSerieAsWatched();
-        }
-        elseif ($action === 'mark_downloaded') {
+            $serie->markSerieAsWatched($watchedDownloadedPaired);
+        } elseif ($action === 'mark_downloaded') {
             $serie->markSerieAsDownloaded();
-        }
-        elseif ($action === 'toggle_autodownload') {
+        } elseif ($action === 'toggle_autodownload') {
             $serie->toggleAutoDownload();
-        }
-        elseif ($action === 'toggle_calendar') {
+        } elseif ($action === 'toggle_calendar') {
             $serie->toggleCalendarDisplay();
-        }
-        elseif ($action === 'mark_season_watched') {
+        } elseif ($action === 'mark_season_watched') {
             $seasonId = $request->input('season_id');
             $season = $serie->seasons()->find($seasonId);
-            if ($season) {
+            if ($season instanceof Season) {
                 foreach ($season->episodes as $episode) {
                     if ($episode->hasAired()) {
-                        $episode->markWatched();
+                        $episode->markWatched($watchedDownloadedPaired);
                     }
                 }
             }
-        }
-        elseif ($action === 'mark_season_downloaded') {
+        } elseif ($action === 'mark_season_downloaded') {
             $seasonId = $request->input('season_id');
             $season = $serie->seasons()->find($seasonId);
-            if ($season) {
+            if ($season instanceof Season) {
                 foreach ($season->episodes as $episode) {
                     if ($episode->hasAired()) {
                         $episode->markDownloaded();
@@ -209,21 +245,60 @@ class SeriesController extends Controller
     }
 
     /**
-     * Refresh series details from external source (Stub).
+     * Refresh a favorite from Trakt and persist the full current series data.
+     *
+     * Mirrors the historical FavoritesManager.refresh flow while preserving
+     * local-only series settings through FavoritesService's existing update path.
      */
-    public function refresh(int $id)
+    public function refresh(int $id, DatabaseMaintenanceLock $maintenanceLock)
     {
-        $serie = $this->favorites->getById($id);
+        $lockOwner = $maintenanceLock->acquire();
 
-        if (!$serie) {
-            return abort(404, 'Show not found');
+        if ($lockOwner === null) {
+            return redirect()->back()->with(
+                'error',
+                'Another database maintenance operation is already running.'
+            );
         }
 
-        // TODO: Implement actual refresh logic via TMDB/TVDB/Trakt services
-        // For now, just touch the updated_at timestamp
-        $serie->touch();
+        try {
+            $serie = $this->favorites->getById($id);
 
-        return redirect()->back()->with('status', "Refreshed {$serie->name}.");
+            if (! $serie) {
+                return abort(404, 'Show not found');
+            }
+
+            if (! $serie->trakt_id) {
+                return redirect()->back()->with('error', "Cannot refresh {$serie->name}: missing Trakt ID.");
+            }
+
+            try {
+                $updated = $this->seriesRefresh->refresh($serie);
+
+                return redirect()->back()->with('status', "Refreshed {$updated->name}.");
+            } catch (RateLimitException $e) {
+                Log::info('Series refresh deferred by Trakt rate limit.', [
+                    'serie_id' => $serie->id,
+                    'trakt_id' => $serie->trakt_id,
+                    'retry_after' => $e->retryAfter,
+                ]);
+
+                return redirect()->back()->with(
+                    'error',
+                    "Trakt is temporarily unavailable. Try again in {$e->retryAfter} seconds."
+                );
+            } catch (\Throwable $e) {
+                Log::error('Series refresh failed.', [
+                    'serie_id' => $serie->id,
+                    'trakt_id' => $serie->trakt_id,
+                    'exception' => $e::class,
+                ]);
+
+                return redirect()->back()->with('error', "Failed to refresh {$serie->name}.");
+            }
+        } finally {
+            $maintenanceLock->release($lockOwner);
+        }
     }
 
     /**

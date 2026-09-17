@@ -15,7 +15,7 @@ class SubtitlesServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new SubtitlesService();
+        $this->service = new SubtitlesService;
     }
 
     public function test_search_by_episode_formats_correct_xml_rpc()
@@ -26,7 +26,7 @@ class SubtitlesServiceTest extends TestCase
         Http::fake([
             'https://api.opensubtitles.org/xml-rpc' => Http::sequence()
                 ->push($loginResponse, 200, ['Content-Type' => 'text/xml'])
-                ->push($searchResponse, 200, ['Content-Type' => 'text/xml'])
+                ->push($searchResponse, 200, ['Content-Type' => 'text/xml']),
         ]);
 
         $serie = new Serie(['name' => 'The Show', 'trakt_id' => 111, 'imdb_id' => 'tt1234567']);
@@ -64,7 +64,7 @@ class SubtitlesServiceTest extends TestCase
         Http::fake([
             'https://api.opensubtitles.org/xml-rpc' => Http::sequence()
                 ->push($loginResponse, 200, ['Content-Type' => 'text/xml'])
-                ->push($searchResponse, 200, ['Content-Type' => 'text/xml'])
+                ->push($searchResponse, 200, ['Content-Type' => 'text/xml']),
         ]);
 
         $results = $this->service->searchByQuery('The Show', ['eng']);

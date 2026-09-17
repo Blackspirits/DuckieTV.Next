@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Services\BackupService;
+use App\Services\DatabaseMaintenanceLock;
+use App\Services\DatabaseMaintenanceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,26 +23,40 @@ class RestoreBackupJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        protected array $backupData
+        protected array $backupData,
+        protected bool $wipe = false,
+        protected ?string $maintenanceLockOwner = null
     ) {}
 
     /**
      * Execute the job.
      */
-    public function handle(BackupService $backupService): void
-    {
-        // Initial Cache State
-
-        Cache::put('backup_progress', [
-            'percent' => 0,
-            'message' => 'Initializing restore batch...',
-            'logs' => [],
-            'status' => 'running',
-            'show_progress' => null,
-            'batch_id' => null,
-        ]);
+    public function handle(
+        BackupService $backupService,
+        DatabaseMaintenanceService $databaseMaintenance,
+        DatabaseMaintenanceLock $maintenanceLock
+    ): void {
+        $lockTransferredToBatch = false;
 
         try {
+            // Initial Cache State
+            Cache::put('backup_progress', [
+                'percent' => 0,
+                'message' => 'Initializing restore batch...',
+                'logs' => [],
+                'status' => 'running',
+                'show_progress' => null,
+                'batch_id' => null,
+            ]);
+
+            if ($this->wipe) {
+                $databaseMaintenance->wipeUserDatabase();
+
+                $data = Cache::get('backup_progress', ['logs' => []]);
+                $data['logs'][] = date('H:i:s').' - Existing database wiped.';
+                Cache::put('backup_progress', $data);
+            }
+
             // 1. Restore Settings First (Fast, Synchronous)
             if (isset($this->backupData['settings'])) {
                 $backupService->restore(['settings' => $this->backupData['settings']], function ($p, $m) {
@@ -54,9 +70,10 @@ class RestoreBackupJob implements ShouldQueue
 
             // 2. Build Jobs via Generator/Array
             $series = $this->backupData['series'] ?? [];
+            $useTraktId = (bool) ($this->backupData['settings']['useTrakt_id'] ?? false);
             $jobs = [];
             foreach ($series as $id => $seriesData) {
-                $jobs[] = new RestoreShowJob((string) $id, $seriesData);
+                $jobs[] = new RestoreShowJob((string) $id, $seriesData, $useTraktId);
             }
 
             if (empty($jobs)) {
@@ -65,11 +82,14 @@ class RestoreBackupJob implements ShouldQueue
                 $data['message'] = 'Restore complete (No series found).';
                 $data['status'] = 'completed';
                 Cache::put('backup_progress', $data);
+                $maintenanceLock->release($this->maintenanceLockOwner);
 
                 return;
             }
 
             // 3. Dispatch Batch
+            $maintenanceLockOwner = $this->maintenanceLockOwner;
+
             $batch = \Illuminate\Support\Facades\Bus::batch($jobs)
                 ->then(function (\Illuminate\Bus\Batch $batch) {
                     // All jobs completed successfully
@@ -89,13 +109,25 @@ class RestoreBackupJob implements ShouldQueue
                     $data['logs'][] = date('H:i:s').' - ERROR: Batch failure detected.';
                     Cache::put('backup_progress', $data);
                 })
-                ->finally(function (\Illuminate\Bus\Batch $batch) {
-                    // Batch finished executing (success or fail)
-                    // Cleanup if needed
+                ->finally(function (\Illuminate\Bus\Batch $batch) use ($maintenanceLockOwner) {
+                    try {
+                        $data = Cache::get('backup_progress', ['logs' => []]);
+
+                        if ($batch->cancelled()) {
+                            $data['status'] = 'cancelled';
+                            $data['message'] = 'Restore cancelled.';
+                            $data['logs'][] = date('H:i:s').' - Restore batch cancelled.';
+                            Cache::put('backup_progress', $data);
+                        }
+                    } finally {
+                        app(DatabaseMaintenanceLock::class)->release($maintenanceLockOwner);
+                    }
                 })
                 ->allowFailures()
                 ->name('Restoring Backup ('.count($jobs).' shows)')
                 ->dispatch();
+
+            $lockTransferredToBatch = true;
 
             // Store Batch ID for cancellation
             $data = Cache::get('backup_progress');
@@ -107,12 +139,24 @@ class RestoreBackupJob implements ShouldQueue
             Log::info("RestoreBackupJob hit Trakt rate limit, releasing back to queue for {$e->retryAfter}s");
             $this->release($e->retryAfter);
         } catch (\Throwable $e) {
-            Log::error('RestoreBackupJob failed: '.$e->getMessage());
+            Log::error('RestoreBackupJob failed.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'lock_transferred_to_batch' => $lockTransferredToBatch,
+            ]);
+
+            if ($lockTransferredToBatch) {
+                // The child batch owns the maintenance lock now. Do not release
+                // or mark the restore terminal while those jobs are still active.
+                return;
+            }
+
+            $maintenanceLock->release($this->maintenanceLockOwner);
 
             $data = Cache::get('backup_progress', ['logs' => []]);
             $data['status'] = 'failed';
-            $data['message'] = 'Error: '.$e->getMessage();
-            $data['logs'][] = date('H:i:s').' - ERROR: '.$e->getMessage();
+            $data['message'] = 'Restore failed.';
+            $data['logs'][] = date('H:i:s').' - ERROR: Restore failed.';
 
             Cache::put('backup_progress', $data);
 

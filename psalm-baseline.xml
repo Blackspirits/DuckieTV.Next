@@ -1,0 +1,1162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<files psalm-version="6.15.1@28dc127af1b5aecd52314f6f645bafc10d0e11f9">
+  <file src="app/Console/Commands/BuildWindowsDistribution.php">
+    <UnusedClass>
+      <code><![CDATA[BuildWindowsDistribution]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Console/Commands/CalendarCommand.php">
+    <InvalidArgument>
+      <code><![CDATA[$this->argument('date')]]></code>
+    </InvalidArgument>
+    <UnusedClass>
+      <code><![CDATA[CalendarCommand]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Console/Commands/DuckieTV/FixDatabaseCommand.php">
+    <InvalidArrayOffset>
+      <code><![CDATA[$units[$i]]]></code>
+    </InvalidArrayOffset>
+    <UnusedClass>
+      <code><![CDATA[FixDatabaseCommand]]></code>
+    </UnusedClass>
+    <UnusedVariable>
+      <code><![CDATA[$pdo]]></code>
+      <code><![CDATA[$pdo]]></code>
+    </UnusedVariable>
+  </file>
+  <file src="app/Console/Commands/DuckieTV/StartCommand.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$winDbPath]]></code>
+    </PossiblyUnusedParam>
+    <UnusedClass>
+      <code><![CDATA[StartCommand]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Console/Commands/SearchCommand.php">
+    <UnusedClass>
+      <code><![CDATA[SearchCommand]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Console/Commands/WatchCommand.php">
+    <UnusedClass>
+      <code><![CDATA[WatchCommand]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/DTOs/TorrentData/Aria2Data.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$gid]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/DTOs/TorrentData/DelugeData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/KtorrentData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/NoneData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <UnusedClass>
+      <code><![CDATA[NoneData]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/DTOs/TorrentData/QBittorrentData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/RTorrentData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/TTorrentData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$upSpeed]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/DTOs/TorrentData/TixatiData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$bytes]]></code>
+      <code><![CDATA[$eta]]></code>
+      <code><![CDATA[$priority]]></code>
+      <code><![CDATA[$upSpeed]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/DTOs/TorrentData/TorrentData.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getInfoHash]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isDownloaded]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/TransmissionData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$id]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/DTOs/TorrentData/UTorrentData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/DTOs/TorrentData/UTorrentWebUIData.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getDownloadDir(): ?string]]></code>
+      <code><![CDATA[public function getDownloadSpeed(): int]]></code>
+      <code><![CDATA[public function getFiles(): mixed]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getProgress(): float]]></code>
+      <code><![CDATA[public function isStarted(): bool]]></code>
+      <code><![CDATA[public function pause(): mixed]]></code>
+      <code><![CDATA[public function remove(): mixed]]></code>
+      <code><![CDATA[public function start(): mixed]]></code>
+      <code><![CDATA[public function stop(): mixed]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDownloadDir]]></code>
+      <code><![CDATA[getDownloadSpeed]]></code>
+      <code><![CDATA[getFiles]]></code>
+      <code><![CDATA[getName]]></code>
+      <code><![CDATA[isStarted]]></code>
+      <code><![CDATA[remove]]></code>
+      <code><![CDATA[start]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Events/TorrentConnectionStatus.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function broadcastOn(): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$clientName]]></code>
+      <code><![CDATA[$message]]></code>
+      <code><![CDATA[$status]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/Http/Controllers/AboutController.php">
+    <UnusedClass>
+      <code><![CDATA[AboutController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/AutoDLStatusController.php">
+    <UnusedClass>
+      <code><![CDATA[AutoDLStatusController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/BackgroundController.php">
+    <UnusedClass>
+      <code><![CDATA[BackgroundController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/CalendarController.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$request]]></code>
+    </PossiblyUnusedParam>
+    <UnusedClass>
+      <code><![CDATA[CalendarController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/EpisodeController.php">
+    <UnnecessaryVarAnnotation>
+      <code><![CDATA[\App\Services\TorrentClientService]]></code>
+    </UnnecessaryVarAnnotation>
+    <UnusedClass>
+      <code><![CDATA[EpisodeController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/SearchController.php">
+    <UnusedClass>
+      <code><![CDATA[SearchController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/SeriesController.php">
+    <InvalidTemplateParam>
+      <code><![CDATA[$serie->seasons->sortBy('seasonnumber')]]></code>
+    </InvalidTemplateParam>
+    <MissingTemplateParam>
+      <code><![CDATA[$serie->seasons->sortBy('seasonnumber')]]></code>
+    </MissingTemplateParam>
+    <NoValue>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+      <code><![CDATA[return abort(404, 'Show not found');]]></code>
+    </NoValue>
+    <UnusedClass>
+      <code><![CDATA[SeriesController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/SettingsController.php">
+    <PossiblyUnusedParam>
+      <code><![CDATA[$request]]></code>
+    </PossiblyUnusedParam>
+    <UnusedClass>
+      <code><![CDATA[SettingsController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/SubtitlesController.php">
+    <UnusedClass>
+      <code><![CDATA[SubtitlesController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Controllers/TorrentController.php">
+    <UnnecessaryVarAnnotation>
+      <code><![CDATA[\App\Services\TorrentClientService]]></code>
+      <code><![CDATA[\App\Services\TorrentClientService]]></code>
+      <code><![CDATA[\App\Services\TorrentClients\TorrentClientInterface|null]]></code>
+    </UnnecessaryVarAnnotation>
+    <UnusedClass>
+      <code><![CDATA[TorrentController]]></code>
+    </UnusedClass>
+    <UnusedForeachValue>
+      <code><![CDATA[$engine]]></code>
+    </UnusedForeachValue>
+  </file>
+  <file src="app/Http/Controllers/WatchlistController.php">
+    <UnusedClass>
+      <code><![CDATA[WatchlistController]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Middleware/SetLocale.php">
+    <UnusedClass>
+      <code><![CDATA[SetLocale]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Http/Requests/AddTorrentRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+      <code><![CDATA[rules]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/ShowSettingsRequest.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function prepareForValidation()]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+      <code><![CDATA[rules]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateAutoDownloadSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateBackupSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateCalendarSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateDisplaySettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateLanguageSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateSubtitlesSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateTorrentSearchSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateTorrentSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/Settings/UpdateTraktSettingsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/TorrentDetailsRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+      <code><![CDATA[rules]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/TorrentDialogRequest.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+      <code><![CDATA[rules]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/Requests/TorrentSearchRequest.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function messages(): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[authorize]]></code>
+      <code><![CDATA[rules]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Http/View/Composers/TorrentClientComposer.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+      <code><![CDATA[compose]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Jobs/PruneAutoDLActivitiesJob.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[handle]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Jobs/RestoreBackupJob.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[handle]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$timeout]]></code>
+    </PossiblyUnusedProperty>
+    <UnusedClosureParam>
+      <code><![CDATA[$batch]]></code>
+      <code><![CDATA[$m]]></code>
+      <code><![CDATA[$p]]></code>
+    </UnusedClosureParam>
+  </file>
+  <file src="app/Jobs/RestoreShowJob.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[handle]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$backoff]]></code>
+      <code><![CDATA[$timeout]]></code>
+      <code><![CDATA[$tries]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/Jobs/TraktUpdateJob.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[handle]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$timeout]]></code>
+      <code><![CDATA[$tries]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/Models/AutoDownloadActivity.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[episode]]></code>
+      <code><![CDATA[series]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Models/Episode.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getAirTime]]></code>
+      <code><![CDATA[getFormattedAirDate]]></code>
+      <code><![CDATA[getFormattedEpisodeAttribute]]></code>
+      <code><![CDATA[isWatched]]></code>
+      <code><![CDATA[markLeaked]]></code>
+      <code><![CDATA[markNotDownloaded]]></code>
+      <code><![CDATA[markNotLeaked]]></code>
+      <code><![CDATA[season]]></code>
+      <code><![CDATA[serie]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Models/Fanart.php">
+    <UnusedClass>
+      <code><![CDATA[Fanart]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Models/Jackett.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[isEnabled]]></code>
+      <code><![CDATA[setDisabled]]></code>
+      <code><![CDATA[setEnabled]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Models/Season.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getEpisodeCount]]></code>
+      <code><![CDATA[getNotWatchedCount]]></code>
+      <code><![CDATA[markSeasonAsUnWatched]]></code>
+      <code><![CDATA[markSeasonAsWatched]]></code>
+      <code><![CDATA[serie]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Models/Serie.php">
+    <InvalidArgument>
+      <code><![CDATA[function ($q) {
+                $q->where('firstaired', '>', now()->getTimestampMs())
+                    ->orWhere('firstaired', 0);
+            }]]></code>
+    </InvalidArgument>
+    <InvalidNullableReturnType>
+      <code><![CDATA[string]]></code>
+    </InvalidNullableReturnType>
+    <InvalidTemplateParam>
+      <code><![CDATA[$this->episodes->keyBy('trakt_id')]]></code>
+      <code><![CDATA[$this->seasons->keyBy('seasonnumber')]]></code>
+    </InvalidTemplateParam>
+    <NullableReturnStatement>
+      <code><![CDATA[preg_replace('/^(The |A )/i', '', $this->name ?? '')]]></code>
+    </NullableReturnStatement>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getEpisodeCount]]></code>
+      <code><![CDATA[getFormattedTotalRunTime]]></code>
+      <code><![CDATA[getFormattedTotalWatchedTime]]></code>
+      <code><![CDATA[getLastEpisode]]></code>
+      <code><![CDATA[getNextEpisode]]></code>
+      <code><![CDATA[getNotWatchedCount]]></code>
+      <code><![CDATA[getSortName]]></code>
+      <code><![CDATA[getWatchedPercentage]]></code>
+      <code><![CDATA[markSerieAsUnWatched]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Models/TMDBFanart.php">
+    <UnusedClass>
+      <code><![CDATA[TMDBFanart]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Models/User.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function casts(): array]]></code>
+    </MissingOverrideAttribute>
+  </file>
+  <file src="app/Providers/AppServiceProvider.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function register(): void]]></code>
+    </MissingOverrideAttribute>
+    <UnusedClass>
+      <code><![CDATA[AppServiceProvider]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Providers/NativeAppServiceProvider.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function phpIni(): array]]></code>
+    </MissingOverrideAttribute>
+    <UnusedClass>
+      <code><![CDATA[NativeAppServiceProvider]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Providers/TorrentServiceProvider.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function register(): void]]></code>
+    </MissingOverrideAttribute>
+    <UnusedClass>
+      <code><![CDATA[TorrentServiceProvider]]></code>
+    </UnusedClass>
+  </file>
+  <file src="app/Services/AutoDownloadService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$favorites]]></code>
+    </PossiblyUnusedProperty>
+    <UndefinedDocblockClass>
+      <code><![CDATA[array]]></code>
+      <code><![CDATA[protected array $remoteTorrents = [];]]></code>
+    </UndefinedDocblockClass>
+  </file>
+  <file src="app/Services/BackupService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedReturnValue>
+      <code><![CDATA[array]]></code>
+      <code><![CDATA[bool]]></code>
+    </PossiblyUnusedReturnValue>
+  </file>
+  <file src="app/Services/CalendarService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+      <code><![CDATA[getSeries]]></code>
+      <code><![CDATA[getTodoEvents]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/FavoritesService.php">
+    <InvalidArgument>
+      <code><![CDATA[$genre]]></code>
+    </InvalidArgument>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+      <code><![CDATA[getByTraktId]]></code>
+      <code><![CDATA[getByTvdbId]]></code>
+      <code><![CDATA[hasFavorite]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$initialized]]></code>
+    </PossiblyUnusedProperty>
+    <UnusedReturnValue>
+      <code><![CDATA[array]]></code>
+      <code><![CDATA[int]]></code>
+    </UnusedReturnValue>
+  </file>
+  <file src="app/Services/SceneNameResolverService.php">
+    <InvalidNullableReturnType>
+      <code><![CDATA[string]]></code>
+    </InvalidNullableReturnType>
+    <NullableReturnStatement>
+      <code><![CDATA[preg_replace('/[^0-9a-zA-Z- ]/', '', $source)]]></code>
+    </NullableReturnStatement>
+  </file>
+  <file src="app/Services/SeriesMetaTranslations.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[translateDayOfWeek]]></code>
+      <code><![CDATA[translateGenre]]></code>
+      <code><![CDATA[translateStatus]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/SettingsService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getDefaults]]></code>
+      <code><![CDATA[persist]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/SubtitlesService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[searchByFilename]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/Aria2Client.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <UnusedVariable>
+      <code><![CDATA[$torrents]]></code>
+    </UnusedVariable>
+  </file>
+  <file src="app/Services/TorrentClients/BaseTorrentClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[abstract public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool;]]></code>
+      <code><![CDATA[abstract public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool;]]></code>
+      <code><![CDATA[abstract public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool;]]></code>
+      <code><![CDATA[abstract public function connect(): bool;]]></code>
+      <code><![CDATA[abstract public function getTorrents(): array;]]></code>
+      <code><![CDATA[public function getId(): string]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function isConnected(): bool]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function readConfig(): void]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+  </file>
+  <file src="app/Services/TorrentClients/BiglyBTClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/DelugeClient.php">
+    <FalsableReturnStatement>
+      <code><![CDATA[parse_url($this->config['server'], PHP_URL_HOST) ?? 'localhost']]></code>
+    </FalsableReturnStatement>
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/KTorrentClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/QBittorrentClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function readConfig(): void]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/RTorrentClient.php">
+    <InvalidArgument>
+      <code><![CDATA[$torrentData]]></code>
+    </InvalidArgument>
+    <InvalidArrayOffset>
+      <code><![CDATA[$props[$i]]]></code>
+    </InvalidArrayOffset>
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $downloadPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <ParamNameMismatch>
+      <code><![CDATA[$downloadPath]]></code>
+      <code><![CDATA[$downloadPath]]></code>
+    </ParamNameMismatch>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/TTorrentClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/TixatiClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $guid): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $guid): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $guid): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $guid): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $guid): bool]]></code>
+    </MissingOverrideAttribute>
+    <ParamNameMismatch>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+      <code><![CDATA[$guid]]></code>
+    </ParamNameMismatch>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/TorrentClientInterface.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[addTorrentByUpload]]></code>
+      <code><![CDATA[getTorrentFiles]]></code>
+      <code><![CDATA[isTorrentStarted]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/TransmissionClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $downloadPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <ParamNameMismatch>
+      <code><![CDATA[$downloadPath]]></code>
+      <code><![CDATA[$downloadPath]]></code>
+    </ParamNameMismatch>
+  </file>
+  <file src="app/Services/TorrentClients/UTorrentClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $downloadPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <ParamNameMismatch>
+      <code><![CDATA[$downloadPath]]></code>
+      <code><![CDATA[$downloadPath]]></code>
+    </ParamNameMismatch>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+    <UnnecessaryVarAnnotation>
+      <code><![CDATA[array]]></code>
+      <code><![CDATA[array]]></code>
+      <code><![CDATA[array]]></code>
+    </UnnecessaryVarAnnotation>
+  </file>
+  <file src="app/Services/TorrentClients/UTorrentWebUIClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function addTorrentByUrl(string $url, ?string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool]]></code>
+      <code><![CDATA[public function connect(): bool]]></code>
+      <code><![CDATA[public function getTorrentFiles(string $infoHash): array]]></code>
+      <code><![CDATA[public function getTorrents(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+      <code><![CDATA[public function isTorrentStarted(string $infoHash): bool]]></code>
+      <code><![CDATA[public function pauseTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function removeTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function startTorrent(string $infoHash): bool]]></code>
+      <code><![CDATA[public function stopTorrent(string $infoHash): bool]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentClients/VuzeClient.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getConfigMappings(): array]]></code>
+      <code><![CDATA[public function getValidationRules(): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/ETagEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/FileMoodEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/GenericSearchEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function getConfig(): array]]></code>
+      <code><![CDATA[public function getDetails(string $url, string $releaseName): array]]></code>
+      <code><![CDATA[public function getName(): string]]></code>
+      <code><![CDATA[public function search(string $query, ?string $sortBy = null): array]]></code>
+      <code><![CDATA[public function setName(string $name): void]]></code>
+    </MissingOverrideAttribute>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/IdopeEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/IsoHuntEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/KATEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/KnabenEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/LimeTorrentsEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/NyaaEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/OneThreeThreeSevenXEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/PiratesParadiseEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[protected function getPropertyForSelector(\Symfony\Component\DomCrawler\Crawler $node, ?array $propertyConfig): ?string]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/SearchEngineInterface.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[getConfig]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/ShowRSSEngine.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function search(string $query, ?string $sortBy = null): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/ThePirateBayEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/TheRARBGEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/TorrentDownloadsEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchEngines/UindexEngine.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TorrentSearchService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[setDefaultEngine]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedProperty>
+      <code><![CDATA[$settings]]></code>
+    </PossiblyUnusedProperty>
+  </file>
+  <file src="app/Services/TraktRequestThrottle.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+    </PossiblyUnusedMethod>
+  </file>
+  <file src="app/Services/TraktService.php">
+    <PossiblyUnusedMethod>
+      <code><![CDATA[__construct]]></code>
+      <code><![CDATA[addShowToCollection]]></code>
+      <code><![CDATA[getPinUrl]]></code>
+      <code><![CDATA[login]]></code>
+      <code><![CDATA[markEpisodeDownloaded]]></code>
+      <code><![CDATA[markEpisodeNotDownloaded]]></code>
+      <code><![CDATA[markEpisodeNotWatched]]></code>
+      <code><![CDATA[markEpisodeWatched]]></code>
+      <code><![CDATA[markEpisodesWatched]]></code>
+      <code><![CDATA[removeShowFromCollection]]></code>
+      <code><![CDATA[userShows]]></code>
+      <code><![CDATA[watched]]></code>
+    </PossiblyUnusedMethod>
+    <PossiblyUnusedReturnValue>
+      <code><![CDATA[string|null]]></code>
+    </PossiblyUnusedReturnValue>
+  </file>
+  <file src="database/factories/UserFactory.php">
+    <MissingOverrideAttribute>
+      <code><![CDATA[public function definition(): array]]></code>
+    </MissingOverrideAttribute>
+    <PossiblyUnusedMethod>
+      <code><![CDATA[unverified]]></code>
+    </PossiblyUnusedMethod>
+    <UnusedClosureParam>
+      <code><![CDATA[$attributes]]></code>
+    </UnusedClosureParam>
+  </file>
+  <file src="database/seeders/DatabaseSeeder.php">
+    <UnusedClass>
+      <code><![CDATA[DatabaseSeeder]]></code>
+    </UnusedClass>
+  </file>
+</files>

@@ -3,9 +3,9 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\TransmissionData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Transmission torrent client implementation.
@@ -28,13 +28,12 @@ class TransmissionClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'transmission.server' => 'nullable|url',
-            'transmission.port' => 'nullable|integer',
+            'transmission.server' => ['nullable', 'string', new ValidTorrentClientServer],
+            'transmission.port' => 'nullable|integer|min:1|max:65535',
             'transmission.path' => 'nullable|string',
             'transmission.use_auth' => 'boolean',
             'transmission.username' => 'nullable|string',
             'transmission.password' => 'nullable|string',
-            'transmission.progressX100' => 'boolean',
         ];
     }
 
@@ -58,6 +57,7 @@ class TransmissionClient extends BaseTorrentClient
      */
     public function connect(): bool
     {
+        $this->connected = false;
         $response = $this->rpc('session-get');
         $this->connected = isset($response['result']) && $response['result'] === 'success';
 
@@ -69,15 +69,23 @@ class TransmissionClient extends BaseTorrentClient
      */
     public function getTorrents(): array
     {
-        $response = $this->rpc('torrent-get', [
-            'fields' => [
-                'id', 'name', 'hashString', 'status', 'error', 'errorString', 'eta',
-                'isFinished', 'isStalled', 'leftUntilDone', 'metadataPercentComplete',
-                'percentDone', 'sizeWhenDone', 'files', 'rateDownload', 'rateUpload', 'downloadDir',
-            ],
-        ]);
+        try {
+            $response = $this->rpc('torrent-get', [
+                'fields' => [
+                    'id', 'name', 'hashString', 'status', 'error', 'errorString', 'eta',
+                    'isFinished', 'isStalled', 'leftUntilDone', 'metadataPercentComplete',
+                    'percentDone', 'sizeWhenDone', 'files', 'rateDownload', 'rateUpload', 'downloadDir',
+                ],
+            ]);
+        } catch (Exception $e) {
+            $this->connected = false;
+
+            throw $e;
+        }
 
         if (! isset($response['arguments']['torrents'])) {
+            $this->connected = false;
+
             return [];
         }
 
@@ -85,7 +93,7 @@ class TransmissionClient extends BaseTorrentClient
             'infoHash' => strtoupper($torrent['hashString']),
             'name' => $torrent['name'],
             'progress' => (float) $torrent['percentDone'] * 100,
-            'status' => $this->getTransmissionStatus($torrent['status']),
+            'status' => (int) $torrent['status'],
             'isStarted' => $torrent['status'] > 0,
             'downloadSpeed' => $torrent['rateDownload'],
         ]))->all();
@@ -153,20 +161,6 @@ class TransmissionClient extends BaseTorrentClient
         return isset($response['result']) && $response['result'] === 'success';
     }
 
-    protected function getTransmissionStatus(int $status): string
-    {
-        return match ($status) {
-            0 => 'Stopped',
-            1 => 'Check Wait',
-            2 => 'Check',
-            3 => 'Download Wait',
-            4 => 'Downloading',
-            5 => 'Seed Wait',
-            6 => 'Seeding',
-            default => 'Unknown',
-        };
-    }
-
     /**
      * Execute an RPC request to Transmission.
      *
@@ -180,7 +174,7 @@ class TransmissionClient extends BaseTorrentClient
     {
         $url = rtrim($this->config['server'], '/').':'.$this->config['port'].'/'.ltrim($this->config['path'], '/');
 
-        $request = Http::withHeaders([
+        $request = $this->http()->withHeaders([
             'X-Transmission-Session-Id' => $this->sessionId ?? '',
         ]);
 

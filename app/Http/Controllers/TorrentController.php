@@ -7,9 +7,9 @@ use App\Http\Requests\TorrentDialogRequest;
 use App\Http\Requests\TorrentSearchRequest;
 use App\Services\SettingsService;
 use App\Services\TorrentSearchService;
+use App\Support\MagnetUri;
 use Exception;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -86,7 +86,9 @@ class TorrentController extends Controller
      *
      * Results structure per item:
      * - releasename: string — torrent release name
-     * - size: string — human-readable size (e.g., "1.23 GB")
+     * - sizeBytes: int|null — canonical machine size in bytes
+     * - sizeParseError: bool — true when a non-empty source size could not be parsed
+     * - size: string — transitional presentation-only size
      * - seeders: int — number of seeders
      * - leechers: int — number of leechers
      * - magnetUrl: string|null — magnet link (if available from search page)
@@ -195,24 +197,29 @@ class TorrentController extends Controller
             $label = $request->validated('label') ?? 'DuckieTV';
             $episodeId = $request->validated('episode_id');
 
-            // Extract infoHash from magnet if not provided
-            $infoHash = $request->validated('infoHash');
-            if (! $infoHash && $request->has('magnet')) {
-                $infoHash = \App\Support\MagnetUri::extractInfoHash($request->validated('magnet'));
+            $providedInfoHash = $request->validated('infoHash');
+            if ($request->has('magnet')) {
+                // The BTIH embedded in the magnet is authoritative over any caller-supplied hash.
+                $infoHash = MagnetUri::extractInfoHash($request->validated('magnet'));
+            } else {
+                $infoHash = $providedInfoHash === null || $providedInfoHash === ''
+                    ? null
+                    : MagnetUri::normalizeInfoHash($providedInfoHash);
+
+                if ($providedInfoHash !== null && $providedInfoHash !== '' && $infoHash === null) {
+                    return response()->json(['error' => 'Invalid torrent infoHash'], 422);
+                }
             }
 
-            // Link to episode if provided
-            if ($episodeId) {
+            if ($episodeId !== null && $infoHash === null) {
+                return response()->json(['error' => 'Cannot track episode torrent without a canonical BTIH'], 422);
+            }
+
+            // Resolve the episode now, but do not mutate local state until the external add succeeds.
+            $episode = null;
+            if ($episodeId !== null) {
                 /** @var \App\Models\Episode|null $episode */
                 $episode = \App\Models\Episode::find($episodeId);
-                if ($episode) {
-                    // Update magnetHash if we found one (either passed or extracted)
-                    if ($infoHash) {
-                        $episode->update(['magnetHash' => $infoHash]);
-                    }
-                    $episode->markDownloaded();
-                    // Optional: You might want to dispatch an event here if needed
-                }
             }
 
             if ($request->has('magnet')) {
@@ -229,34 +236,36 @@ class TorrentController extends Controller
                 return response()->json(['error' => 'No magnet or URL provided'], 422);
             }
 
-            if ($success) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Torrent added successfully',
-                    'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
-                ]);
+            if (! $success) {
+                return response()->json(['error' => 'Failed to add torrent to client'], 422);
             }
 
-            return response()->json(['error' => 'Failed to add torrent to client'], 422);
+            if ($episode) {
+                try {
+                    \Illuminate\Support\Facades\DB::transaction(function () use ($episode, $infoHash) {
+                        if ($infoHash) {
+                            $episode->update(['magnetHash' => $infoHash]);
+                        }
+                        $episode->markDownloaded();
+                    });
+                } catch (Exception) {
+                    return response()->json([
+                        'error' => 'Torrent added, but failed to update episode state',
+                        'torrent_added' => true,
+                    ], 500);
+                }
+            }
 
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => true,
+                'message' => 'Torrent added successfully',
+                'infoHash' => $infoHash, // Return the hash so specific UI logic can use it if needed
+            ]);
+
+        } catch (Exception) {
+            return response()->json(['error' => 'Torrent client request failed'], 500);
         }
 
-    }
-
-    /**
-     * Attempt to connect to the configured torrent client.
-     */
-    public function connect(Request $request): JsonResponse
-    {
-        $config = $request->all();
-        $client = $config['torrenting.client'] ?? 'uTorrent';
-
-        \App\Events\TorrentConnectionStatus::dispatch('connecting', $client, 'Connecting to '.$client.'...');
-        \App\Jobs\AttemptTorrentConnection::dispatch($client, $config);
-
-        return response()->json(['success' => true, 'message' => 'Connection attempt started...']);
     }
 
     /**
@@ -286,13 +295,20 @@ class TorrentController extends Controller
                 $connected = $client->connect();
                 if ($connected) {
                     $torrentList = $client->getTorrents();
-                    $activeCount = count($torrentList);
+                    $connected = $client->isConnected();
+
+                    if ($connected) {
+                        $activeCount = count($torrentList);
+                    } else {
+                        $torrentList = [];
+                        $error = 'Connection to '.$client->getName().' was lost while reading torrents.';
+                    }
                 } else {
                     $error = 'Could not connect to '.$client->getName().'. Check your settings and ensure the client is running.';
                 }
-            } catch (Exception $e) {
+            } catch (Exception) {
                 $connected = false;
-                $error = 'Connection failed: '.$e->getMessage();
+                $error = 'Connection to '.$client->getName().' failed. Check your settings and ensure the client is running.';
             }
 
             return response()->json([
@@ -303,10 +319,10 @@ class TorrentController extends Controller
                 'error' => $error,
             ]);
 
-        } catch (Exception $e) {
+        } catch (Exception) {
             return response()->json([
                 'connected' => false,
-                'error' => $e->getMessage(),
+                'error' => 'Torrent client status unavailable',
                 'client' => 'Unknown',
             ]);
         }
@@ -352,16 +368,23 @@ class TorrentController extends Controller
             try {
                 if ($client->connect()) {
                     $torrents = $client->getTorrents();
-                    // Search for the torrent with the matching infoHash
+                    // Search by canonical BTIH when possible, while preserving non-BTIH transport identifiers.
+                    $requestedHash = MagnetUri::normalizeInfoHash($infoHash);
                     foreach ($torrents as $t) {
-                        // Assuming the client returns objects with getInfoHash() or similar
-                        // Let's check the TorrentClientInterface or a specific client to be sure
-                        if (method_exists($t, 'getInfoHash') && $t->getInfoHash() === $infoHash) {
-                            $torrent = $t;
-                            break;
+                        $rawHash = method_exists($t, 'getInfoHash')
+                            ? $t->getInfoHash()
+                            : ($t->infoHash ?? null);
+
+                        if (! is_string($rawHash)) {
+                            continue;
                         }
-                        // Some clients might store it in a public property or another method
-                        if (isset($t->infoHash) && $t->infoHash === $infoHash) {
+
+                        $remoteHash = MagnetUri::normalizeInfoHash($rawHash);
+                        $matches = $requestedHash !== null
+                            ? $remoteHash === $requestedHash
+                            : $rawHash === $infoHash;
+
+                        if ($matches) {
                             $torrent = $t;
                             break;
                         }
@@ -395,8 +418,8 @@ class TorrentController extends Controller
             $success = $client->startTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to start torrent'], 500);
         }
     }
 
@@ -417,8 +440,8 @@ class TorrentController extends Controller
             $success = $client->stopTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to stop torrent'], 500);
         }
     }
 
@@ -439,8 +462,8 @@ class TorrentController extends Controller
             $success = $client->pauseTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to pause torrent'], 500);
         }
     }
 
@@ -461,8 +484,8 @@ class TorrentController extends Controller
             $success = $client->removeTorrent($infoHash);
 
             return response()->json(['success' => $success]);
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        } catch (Exception) {
+            return response()->json(['error' => 'Failed to remove torrent'], 500);
         }
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Episode;
 use App\Models\Season;
 use App\Models\Serie;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -31,6 +32,14 @@ class FavoritesService
     {
         $this->settings = $settings;
         $this->tmdb = $tmdb;
+    }
+
+    /**
+     * Clear settings-derived state after the settings store is reset or restored.
+     */
+    public function resetCachedSettings(): void
+    {
+        $this->downloadRatings = null;
     }
 
     /**
@@ -83,13 +92,16 @@ class FavoritesService
             $serie->poster = $images['poster'] ?? null;
         }
 
-        $serie->save();
+        return DB::transaction(function () use ($serie, $data, $watched, $onProgress): Serie {
+            $serie->save();
 
-        $this->cleanupEpisodes($data['seasons'] ?? [], $serie);
-        $seasonCache = $this->updateSeasons($serie, $data['seasons'] ?? []);
-        $this->updateEpisodes($serie, $data['seasons'] ?? [], $watched, $seasonCache, $onProgress);
+            $this->cleanupEpisodes($data['seasons'] ?? [], $serie);
+            $seasonCache = $this->updateSeasons($serie, $data['seasons'] ?? []);
+            $this->updateEpisodes($serie, $data['seasons'] ?? [], $watched, $seasonCache, $onProgress);
 
-        return $serie->fresh();
+            return $serie->fresh()
+                ?? throw new \RuntimeException('Favorite disappeared during transactional update.');
+        });
     }
 
     /**
@@ -354,22 +366,22 @@ class FavoritesService
     {
         $query = Serie::whereNotNull('name');
 
-        if (!empty($filters['query'])) {
+        if (! empty($filters['query'])) {
             $q = $filters['query'];
-            $query->where(function($sub) use ($q) {
+            $query->where(function ($sub) use ($q) {
                 $sub->where('name', 'LIKE', "%{$q}%")
                     ->orWhere('alias', 'LIKE', "%{$q}%");
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $status = (array) $filters['status'];
             $query->whereIn('status', $status);
         }
 
-        if (!empty($filters['genre'])) {
+        if (! empty($filters['genre'])) {
             $genres = (array) $filters['genre'];
-            $query->where(function($sub) use ($genres) {
+            $query->where(function ($sub) use ($genres) {
                 foreach ($genres as $genre) {
                     $sub->orWhere('genre', 'LIKE', "%{$genre}%");
                 }
@@ -441,6 +453,7 @@ class FavoritesService
         return $unique->unique()->sort()->values()->all();
     }
 
+    /** @psalm-suppress PossiblyUnusedMethod Retained public service API after AutoDownloadJob consolidation. */
     public function getEpisodesForDateRange(int $start, int $end): \Illuminate\Database\Eloquent\Collection
     {
         return Episode::where('firstaired', '>=', $start)

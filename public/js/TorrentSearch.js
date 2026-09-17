@@ -324,14 +324,18 @@ class TorrentSearch {
     updateTitle() {
         const header = this.el.querySelector('#torrent-dialog-header');
         if (header && this.titleTemplate) {
-            // Replace :itemslength placeholder with actual count
-            let newTitle = this.titleTemplate.replace(':itemslength', this.results.length);
-            // If query exists, append it (optional, to match blade logic)
+            // Replace :itemslength placeholder with actual count.
+            // Keep the query as a text node: it is user-controlled input.
+            const newTitle = this.titleTemplate.replace(':itemslength', this.results.length);
             const query = this.searchInput?.value.trim();
+
+            header.textContent = newTitle;
             if (query) {
-                newTitle += ` <small>(${query})</small>`;
+                const small = document.createElement('small');
+                small.textContent = `(${query})`;
+                header.appendChild(document.createTextNode(' '));
+                header.appendChild(small);
             }
-            header.innerHTML = newTitle;
         }
     }
 

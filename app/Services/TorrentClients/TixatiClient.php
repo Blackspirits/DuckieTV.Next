@@ -3,9 +3,9 @@
 namespace App\Services\TorrentClients;
 
 use App\DTOs\TorrentData\TixatiData;
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 use Exception;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -30,8 +30,8 @@ class TixatiClient extends BaseTorrentClient
     public function getValidationRules(): array
     {
         return [
-            'tixati.server' => 'nullable|url',
-            'tixati.port' => 'nullable|integer',
+            'tixati.server' => ['nullable', 'string', new ValidTorrentClientServer],
+            'tixati.port' => 'nullable|integer|min:1|max:65535',
             'tixati.use_auth' => 'boolean',
             'tixati.username' => 'nullable|string',
             'tixati.password' => 'nullable|string',
@@ -58,7 +58,7 @@ class TixatiClient extends BaseTorrentClient
     public function connect(): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -82,7 +82,7 @@ class TixatiClient extends BaseTorrentClient
     public function getTorrents(): array
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -91,6 +91,8 @@ class TixatiClient extends BaseTorrentClient
             $response = $request->get($this->getBaseUrl().'/transfers');
 
             if (! $response->successful()) {
+                $this->connected = false;
+
                 return [];
             }
 
@@ -124,6 +126,8 @@ class TixatiClient extends BaseTorrentClient
                 return null;
             }))->filter()->values()->all();
         } catch (Exception $e) {
+            $this->connected = false;
+
             return [];
         }
     }
@@ -181,7 +185,7 @@ class TixatiClient extends BaseTorrentClient
     public function getTorrentFiles(string $guid): array
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -224,7 +228,7 @@ class TixatiClient extends BaseTorrentClient
     protected function execute(string $guid, array $formData): bool
     {
         $url = $this->getBaseUrl()."/transfers/{$guid}/options/action";
-        $request = Http::asForm();
+        $request = $this->http()->asForm();
         if ($this->config['use_auth']) {
             $request->withBasicAuth($this->config['username'], $this->config['password']);
         }
@@ -240,7 +244,7 @@ class TixatiClient extends BaseTorrentClient
     public function addMagnet(string $magnet, ?string $dlPath = null, ?string $label = null): bool
     {
         try {
-            $request = Http::asForm();
+            $request = $this->http()->asForm();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }
@@ -271,7 +275,7 @@ class TixatiClient extends BaseTorrentClient
     public function addTorrentByUpload(string $data, string $infoHash, string $releaseName, ?string $dlPath = null, ?string $label = null): bool
     {
         try {
-            $request = Http::asMultipart();
+            $request = $this->http()->asMultipart();
             if ($this->config['use_auth']) {
                 $request->withBasicAuth($this->config['username'], $this->config['password']);
             }

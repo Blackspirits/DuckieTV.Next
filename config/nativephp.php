@@ -103,8 +103,7 @@ return [
     'updater' => [
         /**
          * Whether or not the updater is enabled. Please note that the
-         * updater will only work when your application is bundled
-         * for production.
+         * updater will only work when your application is bundled for production.
          */
         'enabled' => env('NATIVEPHP_UPDATER_ENABLED', true),
 
@@ -157,19 +156,30 @@ return [
     ],
 
     /**
-     * The queue workers that get auto-started on your application start.
+     * The queue workers that get auto-started on application start.
      *
-     * IMPORTANT: timeout must be >= the longest job's $timeout property.
-     * RestoreShowJob has $timeout = 180, TraktUpdateJob has $timeout = 3600.
-     * We set this to 300 as a reasonable compromise for the queue worker.
-     * Jobs with longer timeouts (TraktUpdateJob) should handle their own
-     * time management internally.
+     * Laravel uses a job's own $timeout when one is declared; this worker
+     * timeout is the fallback for jobs without an explicit timeout.
+     * The database queue retry_after is deliberately longer than every known
+     * job/worker timeout so a live reservation cannot be redelivered early.
+     * AutoDL keeps its shorter crash-recovery SLA through its dedicated
+     * lifecycle recovery path rather than the connection-wide retry_after.
      */
     'queue_workers' => [
         'default' => [
-            'queues' => ['default'],
+            // AutoDL gets its own persistent queue identity for crash recovery,
+            // but is consumed by the same NativePHP worker before default work.
+            'queues' => ['autodownload', 'default'],
             'memory_limit' => 128,
             'timeout' => 300,
+            'sleep' => 3,
+        ],
+        'trakt' => [
+            // Long-running Trakt refreshes must not monopolize the worker that
+            // serves AutoDL and interactive/default background work.
+            'queues' => ['trakt-update'],
+            'memory_limit' => 128,
+            'timeout' => 3600,
             'sleep' => 3,
         ],
     ],

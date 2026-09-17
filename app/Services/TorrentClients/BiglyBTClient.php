@@ -2,6 +2,7 @@
 
 namespace App\Services\TorrentClients;
 
+use App\Rules\ValidTorrentClientServer;
 use App\Services\SettingsService;
 
 /**
@@ -24,13 +25,12 @@ class BiglyBTClient extends TransmissionClient
     public function getValidationRules(): array
     {
         return [
-            'biglybt.server' => 'nullable|url',
-            'biglybt.port' => 'nullable|integer',
+            'biglybt.server' => ['nullable', 'string', new ValidTorrentClientServer],
+            'biglybt.port' => 'nullable|integer|min:1|max:65535',
             'biglybt.path' => 'nullable|string',
             'biglybt.use_auth' => 'boolean',
             'biglybt.username' => 'nullable|string',
             'biglybt.password' => 'nullable|string',
-            'biglybt.progressX100' => 'boolean',
         ];
     }
 
@@ -46,7 +46,6 @@ class BiglyBTClient extends TransmissionClient
             'username' => 'biglybt.username',
             'password' => 'biglybt.password',
             'use_auth' => 'biglybt.use_auth',
-            'progressX100' => 'biglybt.progressX100',
         ];
     }
 }

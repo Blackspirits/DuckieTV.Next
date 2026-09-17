@@ -11,7 +11,10 @@ class SettingsService
     private bool $loaded = false;
 
     /**
-     * All default settings, ported 1:1 from SettingsService.js lines 84-262.
+     * Default settings ported from SettingsService.js lines 84-262.
+     *
+     * Runtime-safety overrides are documented inline where Next cannot honor
+     * the historical browser/runtime contract.
      */
     private array $defaults = [
         // ─── Torrent Search Mirrors ─────────────────────────────
@@ -186,7 +189,9 @@ class SettingsService
         'torrenting.autodownload' => false,
         'torrenting.autostop' => true,
         'torrenting.autostop_all' => false,
-        'torrenting.client' => 'uTorrent',
+        // Classic uTorrent depended on browser-side localhost discovery/pairing.
+        // Until that runtime exists in Next, default to the registered fallback.
+        'torrenting.client' => 'qBittorrent 4.1+',
         'torrenting.directory' => true,
         'torrenting.enabled' => true,
         'torrenting.global_size_max' => null,
@@ -209,7 +214,7 @@ class SettingsService
         'torrenting.streaming' => false,
 
         // ─── Trakt ─────────────────────────────────────────────
-        'trakt-update.period' => 1,
+        'trakt-update.period' => 12,
         'trakttv.passwordHash' => null,
         'trakttv.sync' => false,
         'trakttv.sync-downloaded' => true,

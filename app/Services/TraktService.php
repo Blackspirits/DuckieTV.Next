@@ -70,33 +70,34 @@ class TraktService
 
     private SettingsService $settings;
 
-    /**
-     * Whether to throttle requests to "play nice" with Trakt API.
-     * When true, sleeps for 1 second before *every* request.
-     */
     private bool $throttlingEnabled = false;
 
-    public function __construct(SettingsService $settings)
-    {
+    public function __construct(
+        SettingsService $settings,
+        private readonly TraktRequestThrottle $requestThrottle
+    ) {
         $this->settings = $settings;
     }
 
     /**
-     * Enable or disable global API throttling.
-     * Useful for bulk operations like backup restore.
+     * Run a bulk Trakt operation under the shared request throttle.
      */
-    public function setThrottling(bool $enabled): void
+    public function withThrottling(callable $callback): mixed
     {
-        $this->throttlingEnabled = $enabled;
+        $previous = $this->throttlingEnabled;
+        $this->throttlingEnabled = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->throttlingEnabled = $previous;
+        }
     }
 
-    /**
-     * Sleep if throttling is enabled.
-     */
     private function throttle(): void
     {
         if ($this->throttlingEnabled) {
-            sleep(1);
+            $this->requestThrottle->wait();
         }
     }
 
@@ -182,12 +183,13 @@ class TraktService
     private function apiGet(string $type, ?string $param = null, ?string $param2 = null, int $retry = 0): mixed
     {
         $this->checkRateLimit();
+        $this->throttle();
         $url = $this->getUrl($type, $param, $param2);
         // ... rest of method
 
         $needsAuth = in_array($type, $this->authorizedEndpoints);
 
-        Log::info("TraktService GET: {$url}", ['headers' => $this->getHeaders($needsAuth)]);
+        Log::info("TraktService GET: {$url}", ['authenticated' => $needsAuth]);
 
         $response = Http::withHeaders($this->getHeaders($needsAuth))
             ->timeout(120)
@@ -216,6 +218,7 @@ class TraktService
     private function apiPost(string $type, array $data = [], int $retry = 0): mixed
     {
         $this->checkRateLimit();
+        $this->throttle();
         $url = $this->getUrl($type);
 
         $response = Http::withHeaders($this->getHeaders(true))
@@ -292,10 +295,13 @@ class TraktService
         }
 
         if ($status >= 500) {
-            Log::error("Trakt API Server Error ({$status}) on endpoint '{$type}'. Response body: ".$response->body());
+            Log::error('Trakt API Server Error', [
+                'status' => $status,
+                'endpoint' => $type,
+            ]);
         }
 
-        throw new \RuntimeException("Trakt API error {$status}: ".$response->body());
+        throw new \RuntimeException("Trakt API request failed (HTTP {$status})");
     }
 
     /**
@@ -652,7 +658,7 @@ class TraktService
             ]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('Trakt login failed: '.$response->body());
+            throw new \RuntimeException("Trakt login failed (HTTP {$response->status()})");
         }
 
         $data = $response->json();
@@ -691,7 +697,7 @@ class TraktService
             ]);
 
         if (! $response->successful()) {
-            Log::error('Trakt: Token renewal failed: '.$response->body());
+            Log::error('Trakt: Token renewal failed', ['status' => $response->status()]);
 
             return null;
         }

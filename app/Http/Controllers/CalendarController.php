@@ -25,7 +25,11 @@ class CalendarController extends Controller
     public function index(Request $request)
     {
         $date = $request->has('date') ? Carbon::parse($request->get('date')) : now();
-        $mode = $request->get('mode', 'month');
+        $requestedMode = $request->query('mode');
+        $mode = is_string($requestedMode)
+            && in_array($requestedMode, ['decade', 'year', 'month', 'week'], true)
+                ? $requestedMode
+                : ((string) settings()->get('calendar.mode', 'date') === 'week' ? 'week' : 'month');
 
         $viewData = match ($mode) {
             'decade' => $this->decadeView($date),
@@ -34,8 +38,14 @@ class CalendarController extends Controller
             default => $this->monthView($date),
         };
 
+        $viewData['calendarState'] = $this->calendarClientState(
+            $mode,
+            $date,
+            $viewData['events'] ?? []
+        );
+
         if ($request->ajax()) {
-            return view('calendar.partial', $viewData);
+            return view('calendar.fragment', $viewData);
         }
 
         return view('calendar.index', $viewData);
@@ -49,7 +59,7 @@ class CalendarController extends Controller
     {
         $year = $date->year;
         // Calculate start of decade (e.g. 2020 for 2026)
-        $startYear = floor($year / 10) * 10 - 1; 
+        $startYear = floor($year / 10) * 10 - 1;
         $endYear = $startYear + 11;
 
         $years = $this->calendar->getEpisodeCountsByYear($startYear, $endYear);
@@ -60,7 +70,7 @@ class CalendarController extends Controller
             'currentDate' => $date, // Keep the specific date for context
             'startYear' => $startYear,
             'endYear' => $endYear,
-            'title' => $startYear . '-' . $endYear,
+            'title' => $startYear.'-'.$endYear,
         ];
     }
 
@@ -90,9 +100,12 @@ class CalendarController extends Controller
      */
     private function monthView(Carbon $date): array
     {
-        $start = $date->copy()->startOfMonth()->startOfWeek(Carbon::MONDAY);
-        $end = $date->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
+        $startSunday = (bool) settings()->get('calendar.startSunday', true);
+        $weekStart = $startSunday ? Carbon::SUNDAY : Carbon::MONDAY;
+        $weekEnd = $startSunday ? Carbon::SATURDAY : Carbon::SUNDAY;
 
+        $start = $date->copy()->startOfMonth()->startOfWeek($weekStart);
+        $end = $date->copy()->endOfMonth()->endOfWeek($weekEnd);
         $events = $this->calendar->getEventsForDateRange($start, $end);
 
         return [
@@ -113,9 +126,12 @@ class CalendarController extends Controller
      */
     private function weekView(Carbon $date): array
     {
-        $start = $date->copy()->startOfWeek(Carbon::MONDAY);
-        $end = $date->copy()->endOfWeek(Carbon::SUNDAY);
+        $startSunday = (bool) settings()->get('calendar.startSunday', true);
+        $weekStart = $startSunday ? Carbon::SUNDAY : Carbon::MONDAY;
+        $weekEnd = $startSunday ? Carbon::SATURDAY : Carbon::SUNDAY;
 
+        $start = $date->copy()->startOfWeek($weekStart);
+        $end = $date->copy()->endOfWeek($weekEnd);
         $events = $this->calendar->getEventsForDateRange($start, $end);
 
         return [
@@ -129,12 +145,61 @@ class CalendarController extends Controller
     }
 
     /**
+     * @return array{
+     *     mode: string,
+     *     date: string,
+     *     startSunday: bool,
+     *     showDownloaded: bool,
+     *     showEpisodeNumbers: bool,
+     *     downloadedEpisodeIds: array<int, int>
+     * }
+     */
+    private function calendarClientState(string $mode, Carbon $date, mixed $events): array
+    {
+        $downloadedEpisodeIds = [];
+
+        if (is_array($events)) {
+            foreach ($events as $dayEvents) {
+                if (! is_array($dayEvents)) {
+                    continue;
+                }
+
+                foreach ($dayEvents as $event) {
+                    if (! is_array($event)) {
+                        continue;
+                    }
+
+                    $episode = $event['episode'] ?? null;
+                    if (
+                        $episode instanceof \App\Models\Episode
+                        && (int) $episode->downloaded === 1
+                    ) {
+                        $downloadedEpisodeIds[] = (int) $episode->id;
+                    }
+                }
+            }
+        }
+
+        return [
+            'mode' => $mode,
+            'date' => $date->toDateString(),
+            'startSunday' => (bool) settings()->get('calendar.startSunday', true),
+            'showDownloaded' => (bool) settings()->get('calendar.show-downloaded', true),
+            'showEpisodeNumbers' => (bool) settings()->get('calendar.show-episode-numbers', false),
+            'downloadedEpisodeIds' => array_values(array_unique($downloadedEpisodeIds)),
+        ];
+    }
+
+    /**
      * Mark a whole day as watched.
      */
     public function markDayWatched(Request $request)
     {
         $date = Carbon::parse($request->get('date'));
-        $this->calendar->markDayWatched($date);
+        $this->calendar->markDayWatched(
+            $date,
+            (bool) settings()->get('episode.watched-downloaded.pairing', true)
+        );
 
         return back()->with('status', "Marked all episodes on {$date->toDateString()} as watched.");
     }
@@ -159,6 +224,6 @@ class CalendarController extends Controller
         $newMode = ($currentMode === 'calendar') ? 'todo' : 'calendar';
         session(['viewmode' => $newMode]);
 
-        return back()->with('status', "Switched to " . ucfirst($newMode) . " view.");
+        return back()->with('status', 'Switched to '.ucfirst($newMode).' view.');
     }
 }
