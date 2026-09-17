@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -32,20 +33,27 @@ class PosterService
             return $series;
         }
 
-        // Use Http::pool for concurrent requests
+        // Use Http::pool for concurrent requests. A connection-level failure is
+        // returned in-place as a ConnectionException, so poster enrichment must
+        // treat non-Response entries as optional misses rather than call methods
+        // on the exception and fail the parent search request.
         $responses = Http::pool(fn ($pool) => array_map(
-            fn ($show) => $pool->as((string) $show['tmdb_id'])->get(self::TMDB_API_URL."/tv/{$show['tmdb_id']}", [
-                'api_key' => self::TMDB_API_KEY,
-                'language' => 'en-US',
-            ]),
+            fn ($show) => $pool->as((string) $show['tmdb_id'])
+                ->timeout(15)
+                ->get(self::TMDB_API_URL."/tv/{$show['tmdb_id']}", [
+                    'api_key' => self::TMDB_API_KEY,
+                    'language' => 'en-US',
+                ]),
             $toFetch
         ));
 
         // Map results back to the series array
         foreach ($series as &$show) {
             $tmdbId = (string) ($show['tmdb_id'] ?? '');
-            if ($tmdbId && isset($responses[$tmdbId]) && $responses[$tmdbId]->successful()) {
-                $data = $responses[$tmdbId]->json();
+            $response = $responses[$tmdbId] ?? null;
+
+            if ($response instanceof Response && $response->successful()) {
+                $data = $response->json();
                 if (! empty($data['poster_path'])) {
                     $show['poster'] = self::TMDB_IMAGE_BASE.$data['poster_path'];
                 }
